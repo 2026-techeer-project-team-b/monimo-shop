@@ -1,0 +1,57 @@
+# 바뀐 파일 위치 -> area 라벨 규칙 (.github/workflows/pr-labeler.yml 이 사용)
+
+area/gateway:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'gateway/**'
+
+area/order:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'order/**'
+
+area/payment:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'payment/**'
+
+area/inventory:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'inventory/**'
+
+area/agent-extension:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'agent-extension/**'
+
+area/otel:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'otel/**'
+
+area/k6:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'k6/**'
+
+area/build:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'build.gradle.kts'
+      - 'settings.gradle.kts'
+      - 'gradle/**'
+      - '**/build.gradle.kts'
+      - '**/Dockerfile'
+      - 'docker-compose*.yml'
+
+area/ci:
+  - changed-files:
+    - any-glob-to-any-file:
+      - '.github/**'
+
+area/docs:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'docs/**'
+      - '**/*.md'
