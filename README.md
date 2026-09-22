@@ -25,9 +25,14 @@
 
 실제 값은 레포에 올리지 않는다. `.env.example` 에 이름만 적는다.
 
-| 이름 | 설명 |
-|---|---|
-| (준비 중) | |
+로컬 실행용 (`.env.example` 참고, 비워 두면 기본값):
+
+| 이름 | 기본값 | 설명 |
+|---|---|---|
+| `MYSQL_PORT` | 13306 | MySQL 호스트 포트 |
+| `GATEWAY_PORT` · `ORDER_PORT` · `PAYMENT_PORT` · `INVENTORY_PORT` | 8090 · 8091 · 8092 · 8093 | 쇼핑몰 서비스 호스트 포트 |
+| `MYSQL_USER` · `MYSQL_PASSWORD` | shop · shop | 로컬 전용 계정 |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | http://localhost:4317 | OTel Java Agent 가 보낼 수집기 gRPC 주소 |
 
 ## 포트
 
