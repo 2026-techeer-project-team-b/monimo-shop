@@ -14,7 +14,7 @@
 | `payment/` | 결제 (1a) |
 | `inventory/` | 재고 (1b에 추가) |
 | `agent-extension/` | 스레드 덤프 명령 수신 Extension (우리가 만드는 유일한 에이전트 코드) |
-| `otel/` | OTel Java Agent 설정 · 버전 고정 |
+| `otel/` | OTel Java Agent 설정 · 버전 고정 — `agent.properties`(전송 gRPC · 수집기 `collector:4317` · 샘플러 always_on) · `AGENT_VERSION` |
 | `k6/` | 부하 · 에러 주입 시나리오 |
 
 ## 로컬 실행
@@ -32,7 +32,8 @@
 | `MYSQL_PORT` | 13306 | MySQL 호스트 포트 |
 | `GATEWAY_PORT` · `ORDER_PORT` · `PAYMENT_PORT` · `INVENTORY_PORT` | 8090 · 8091 · 8092 · 8093 | 쇼핑몰 서비스 호스트 포트 |
 | `MYSQL_USER` · `MYSQL_PASSWORD` | shop · shop | 로컬 전용 계정 |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | http://localhost:4317 | OTel Java Agent 가 보낼 수집기 gRPC 주소 |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | http://localhost:4317 | OTel Java Agent 가 보낼 수집기 gRPC 주소. 컨테이너끼리는 `otel/agent.properties` 의 `http://collector:4317` (공용 네트워크 `monimo-dev`) |
+| `OTEL_SERVICE_NAME` | (컨테이너별) | `shop-gateway` · `shop-order` · `shop-payment` · `shop-inventory` |
 
 ## 포트
 
