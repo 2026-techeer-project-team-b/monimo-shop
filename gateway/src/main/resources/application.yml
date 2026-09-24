@@ -1,0 +1,7 @@
+# 컨테이너 밖에서 직접 띄울 때의 기본 포트. 컨테이너 안에서는 compose 가 호스트 포트를 매핑한다 (.env.example 참고).
+server:
+  port: 8090
+
+spring:
+  application:
+    name: shop-gateway
