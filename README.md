@@ -2,7 +2,7 @@
 
 감시 대상 쇼핑몰 4종(게이트웨이 · 주문 · 결제 · 재고)과 OTel Java Agent 설정, 스레드 덤프 Extension
 
-- 기술: Kotlin · Spring Boot 3.x · Gradle · OTel Java Agent
+- 기술: Kotlin 2.2 · Spring Boot 3.5 · Java 17 · Gradle 8.14 (멀티모듈 5개: gateway · order · payment · inventory · agent-extension) · OTel Java Agent
 - 상태: 뼈대만 있음 (개발환경 세팅 중)
 
 ## 폴더 구성
@@ -19,7 +19,14 @@
 
 ## 로컬 실행
 
-준비 중
+필요한 것: JDK 17 (없으면 Gradle 이 자동으로 내려받는다), Docker (compose 는 준비 중)
+
+```bash
+./gradlew build                 # 5개 모듈 컴파일 + 서비스 4개 bootJar
+./gradlew :order:bootRun        # 주문 서비스만 8091 에서 띄우기 (payment 는 8092, gateway 8090, inventory 8093)
+```
+
+compose 로 4개 + MySQL 을 한 번에 켜는 명령은 준비 중이다 (`docker-compose.dev.yml`).
 
 ## 환경변수
 
