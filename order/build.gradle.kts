@@ -7,7 +7,9 @@ plugins {
 dependencies {
     implementation(platform(libs.spring.boot.bom))
     implementation(libs.bundles.service.base)
+    implementation(libs.bundles.mysql)
 
     testImplementation(libs.bundles.service.test)
+    testImplementation(libs.bundles.mysql.test)
     testRuntimeOnly(libs.junit.platform.launcher)
 }
