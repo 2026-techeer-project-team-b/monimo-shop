@@ -19,6 +19,12 @@ kotest-runner-junit5 = { module = "io.kotest:kotest-runner-junit5", version.ref 
 kotest-assertions-core = { module = "io.kotest:kotest-assertions-core", version.ref = "kotest" }
 kotest-extensions-spring = { module = "io.kotest:kotest-extensions-spring", version.ref = "kotest" }
 junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher" }
+# 주문 서비스 DB (MySQL + JDBC — 서버맵에 DB 노드가 나오게, Notion 「사용할 라이브러리 정리」 §3). 버전은 Spring Boot BOM 이 정한다
+spring-boot-starter-jdbc = { module = "org.springframework.boot:spring-boot-starter-jdbc" }
+mysql-connector-j = { module = "com.mysql:mysql-connector-j" }
+# 테스트에서 진짜 MySQL 을 컨테이너로 띄운다 (Testcontainers)
+spring-boot-testcontainers = { module = "org.springframework.boot:spring-boot-testcontainers" }
+testcontainers-mysql = { module = "org.testcontainers:mysql" }
 
 [bundles]
 # 쇼핑몰 서비스 4개가 공통으로 쓰는 것. 동기 Spring MVC 만 쓴다 (WebFlux 는 MVP 범위 밖, ADR #33).
@@ -26,6 +32,9 @@ service-base = ["spring-boot-starter-web", "spring-boot-starter-actuator", "jack
 service-test = ["spring-boot-starter-test", "kotest-runner-junit5", "kotest-assertions-core", "kotest-extensions-spring"]
 # 스프링이 없는 모듈(agent-extension)용
 kotest = ["kotest-runner-junit5", "kotest-assertions-core"]
+# MySQL 쓰는 모듈(order)
+mysql = ["spring-boot-starter-jdbc", "mysql-connector-j"]
+mysql-test = ["spring-boot-testcontainers", "testcontainers-mysql"]
 
 [plugins]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
