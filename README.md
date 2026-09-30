@@ -40,6 +40,24 @@ curl -X POST localhost:8091/api/orders -H 'Content-Type: application/json' \
 
 compose 로 서비스 + MySQL 을 한 번에 켜는 명령은 준비 중이다 (`docker-compose.dev.yml`). 그때 위 `docker run` 은 필요 없어진다.
 
+## 컨테이너로 실행 (에이전트 부착)
+
+이미지를 띄우면 OTel Java Agent(버전 `otel/AGENT_VERSION`)가 붙어 `collector:4317` 로 트레이스 · 메트릭 · 로그를 보낸다. 앱 코드에는 계측이 없다(ADR #33). 설정은 `otel/agent.properties`, 서비스 이름은 이미지 기본값 `OTEL_SERVICE_NAME=shop-<서비스>`.
+
+```bash
+docker network create monimo-dev                                   # 처음 한 번만 (backend 와 같이 쓰는 공용 네트워크)
+docker build -f payment/Dockerfile -t monimo/shop-payment:dev .    # 빌드는 항상 레포 루트에서
+docker build -f order/Dockerfile   -t monimo/shop-order:dev .
+
+# backend 수집기(monimo-backend 에서 docker compose --profile collector up -d --wait) 와 MySQL 이 monimo-dev 에 있어야 한다
+docker network connect monimo-dev shop-mysql
+docker run -d --name payment --network monimo-dev -p 8092:8092 monimo/shop-payment:dev
+docker run -d --name order   --network monimo-dev -p 8091:8091 -e MYSQL_HOST=shop-mysql monimo/shop-order:dev
+docker logs order 2>&1 | grep -m1 "opentelemetry-javaagent - version"   # 에이전트가 붙었는지
+```
+
+compose(`docker-compose.dev.yml`)가 생기면 위 `docker run` 은 필요 없어진다.
+
 ## API
 
 감시 대상이라 제품 기능은 없고 호출 골격만 있다. 주문 한 건이 `order → MySQL` 과 `order → payment` 두 홉을 만든다. 파수꾼 카나리와 k6 가 이 모양을 그대로 쓴다.
@@ -75,13 +93,13 @@ compose 로 서비스 + MySQL 을 한 번에 켜는 명령은 준비 중이다 (
 
 ## 포트
 
-| 서비스 | 포트 | 상태 |
-|---|---|---|
-| gateway | 8090 | 빈 앱 (1b) |
-| order | 8091 | 주문 API |
-| payment | 8092 | 결제 API |
-| inventory | 8093 | 빈 앱 (1b) |
-| MySQL | 13306 | `shop-mysql` 컨테이너 |
+| 서비스 | 포트 | 컨테이너 이름 | 상태 |
+|---|---|---|---|
+| gateway | 8090 | | 빈 앱 (1b) |
+| order | 8091 | `order` | 주문 API |
+| payment | 8092 | `payment` | 결제 API |
+| inventory | 8093 | | 빈 앱 (1b) |
+| MySQL | 13306 (컨테이너 안 3306) | `shop-mysql` | |
 
 ## 관련 문서
 
