@@ -1,0 +1,42 @@
+# k6 시나리오
+
+쇼핑몰(감시 대상)에 부하를 걸고 에러 · 지연을 섞는다. 알림 규칙과 화면을 시험하는 재료다.
+Phase 1a 데모 문장 "k6 로 에러를 내면 N초 안에 슬랙에 알림이 온다"(ADR #19)가 여기서 시작한다.
+
+## 실행
+
+쇼핑몰을 compose 로 켠 뒤 레포 루트에서 실행한다. 도커 이미지를 쓰므로 k6 를 설치하지 않아도 되고 버전이 고정된다.
+
+```bash
+docker compose -f docker-compose.dev.yml up -d --build --wait
+
+docker run --rm --network monimo-dev -v "$PWD/k6:/scripts" -e BASE_URL=http://order:8091 \
+  <아래 표의 -e 값들> grafana/k6:2.3.0 run /scripts/order.js
+```
+
+| 목적 | 넣을 값 | 결과 |
+|---|---|---|
+| smoke (살아 있나) | `-e RATE=1 -e DURATION=10s` | 정상 주문 10건 |
+| 기본 부하 | (기본값) 초당 10건 · 1분 | 정상 주문 600건 |
+| 에러 주입 (5xx 비율 규칙) | `-e ERROR_RATE=0.3 -e DURATION=2m` | 1,200건 중 360건 502 |
+| 지연 주입 (p95 지연 규칙) | `-e SLOW_RATE=0.2 -e DURATION=2m` | 1,200건 중 240건 2초 이상 |
+
+로컬에 k6 가 있으면 `k6 run -e RATE=1 -e DURATION=10s k6/order.js` 도 된다(기본 주소 `http://localhost:8091`).
+
+## 환경변수
+
+| 이름 | 기본값 | 설명 |
+|---|---|---|
+| `BASE_URL` | `http://localhost:8091` | 주문 서비스 주소. 도커로 돌릴 때는 `http://order:8091` |
+| `RATE` | 10 | 초당 주문 수. 응답이 느려져도 유지된다(constant-arrival-rate) |
+| `DURATION` | `1m` | 실행 시간 |
+| `ERROR_RATE` | 0 | 결제 실패(`X-Shop-Fault: payment-error` → 502) 비율, 0 ~ 1 |
+| `SLOW_RATE` | 0 | 결제 2초 지연(`X-Shop-Fault: payment-slow`) 비율, 0 ~ 1 |
+
+## 읽는 법
+
+- **비율은 정확하다.** 요청 순번을 100 으로 나눈 나머지로 종류를 정한다. `ERROR_RATE=0.3` 이면 100건마다 앞 30건이 502 다. 난수가 아니라서 몇 번을 돌려도 같다.
+- **요청 수는 1건 더 나올 수 있다.** k6 가 실행 시간이 끝나는 경계에서 1건을 더 넣는다(초당 5건 · 20초 → 101건). 101번째는 순번 100 이라 다시 앞쪽(에러 구간)에 들어가서, 그때 502 는 30건이 아니라 31건이다.
+- **checks 가 100% 가 아니면 실패로 끝난다.** 에러 주입 요청이 502 인 것은 "기대한 결과"라 통과다. 정상 요청이 502 거나 지연이 2초 안 되면 실패다.
+- **요청마다 `fault` 태그가 붙는다.** 결과 요약에서 `none` · `payment-error` · `payment-slow` 별로 볼 수 있다.
+- 데이터를 수집기까지 보내려면 monimo-backend 에서 `docker compose --profile collector up -d --wait` 를 같이 켠다.

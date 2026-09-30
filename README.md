@@ -67,6 +67,17 @@ compose 로 결제 · 주문을 켜 둔 상태에서 `bootRun` 을 하면 포트
 | `payment-error` | payment 500 → order 502 | 5xx 비율 규칙 시험 |
 | `payment-slow` | payment 가 2초 잠든 뒤 정상 응답 | p95 지연 규칙 시험 |
 
+## 부하 · 에러 주입 (k6)
+
+쇼핑몰을 compose 로 켠 뒤 레포 루트에서 실행한다. 자세한 시나리오와 환경변수는 [`k6/README.md`](k6/README.md).
+
+```bash
+# 초당 5건 · 20초, 그중 30% 결제 실패(502) · 10% 결제 2초 지연
+docker run --rm --network monimo-dev -v "$PWD/k6:/scripts" -e BASE_URL=http://order:8091 \
+  -e RATE=5 -e DURATION=20s -e ERROR_RATE=0.3 -e SLOW_RATE=0.1 \
+  grafana/k6:2.3.0 run /scripts/order.js
+```
+
 ## 환경변수
 
 실제 값은 레포에 올리지 않는다. `.env.example` 에 이름만 적는다.

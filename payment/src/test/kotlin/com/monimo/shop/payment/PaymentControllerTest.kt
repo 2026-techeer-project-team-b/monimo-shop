@@ -1,6 +1,7 @@
 package com.monimo.shop.payment
 
 import io.kotest.core.spec.style.BehaviorSpec
+import org.hamcrest.Matchers.startsWith
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest
 import org.springframework.context.annotation.Import
 import org.springframework.http.MediaType
@@ -21,7 +22,7 @@ class PaymentControllerTest(mvc: MockMvc) : BehaviorSpec({
                 }.andExpect {
                     status { isOk() }
                     jsonPath("$.status") { value("APPROVED") }
-                    jsonPath("$.paymentId") { value(org.hamcrest.Matchers.startsWith("pay-")) }
+                    jsonPath("$.paymentId") { value(startsWith("pay-")) }
                 }
             }
         }
