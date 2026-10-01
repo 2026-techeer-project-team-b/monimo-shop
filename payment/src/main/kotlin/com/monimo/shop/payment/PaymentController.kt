@@ -23,4 +23,9 @@ class PaymentController(private val service: PaymentService) {
     @ExceptionHandler(PaymentService.InjectedFailure::class)
     fun onInjected(e: PaymentService.InjectedFailure): ResponseEntity<Map<String, String>> =
         ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(mapOf("reason" to e.message.orEmpty()))
+
+    /** 결제사(pg-stub)가 실패하거나 응답이 없으면 502. "뒤의 시스템 잘못" 이라는 뜻이라 500 과 구분한다. */
+    @ExceptionHandler(PgClient.PgFailure::class)
+    fun onPgFailure(e: PgClient.PgFailure): ResponseEntity<Map<String, String>> =
+        ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(mapOf("reason" to e.message.orEmpty()))
 }

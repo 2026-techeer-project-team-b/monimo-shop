@@ -5,3 +5,7 @@ server:
 spring:
   application:
     name: shop-payment
+
+# 더미 외부 결제사(pg-stub, WireMock) 주소. 컨테이너끼리는 http://pg-stub:8080 (payment/Dockerfile 기본값)
+pg:
+  base-url: ${PG_BASE_URL:http://localhost:8099}

@@ -1,0 +1,13 @@
+{
+  "priority": 1,
+  "request": {
+    "method": "POST",
+    "url": "/v1/approvals",
+    "headers": { "X-Shop-Fault": { "equalTo": "pg-error" } }
+  },
+  "response": {
+    "status": 503,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": { "error": "pg unavailable" }
+  }
+}

@@ -16,6 +16,7 @@
 | `agent-extension/` | 스레드 덤프 명령 수신 Extension (우리가 만드는 유일한 에이전트 코드) |
 | `otel/` | OTel Java Agent 설정 · 버전 고정 — `agent.properties`(전송 gRPC · 수집기 `collector:4317` · 샘플러 always_on) · `AGENT_VERSION` |
 | `k6/` | 부하 · 에러 주입 시나리오 |
+| `pg-stub/` | 더미 외부 결제사 (WireMock 응답 정의, 에이전트 없음) |
 
 ## 로컬 실행
 
@@ -23,11 +24,11 @@
 
 ### 한 번에 켜기 — compose (에이전트 부착)
 
-MySQL · 결제 · 주문 세 컨테이너가 순서대로 뜬다(MySQL 이 준비된 뒤 주문). 이미지에 OTel Java Agent(버전 `otel/AGENT_VERSION`)가 들어 있어 `collector:4317` 로 트레이스 · 메트릭 · 로그를 보낸다. 앱 코드에는 계측이 없다(ADR #33).
+MySQL · 더미 외부 결제사(pg-stub) · 결제 · 주문 네 컨테이너가 순서대로 뜬다(결제사 뒤 결제, MySQL · 결제 뒤 주문). 이미지에 OTel Java Agent(버전 `otel/AGENT_VERSION`)가 들어 있어 `collector:4317` 로 트레이스 · 메트릭 · 로그를 보낸다. 앱 코드에는 계측이 없다(ADR #33).
 
 ```bash
 docker network create monimo-dev                                 # 처음 한 번만 (backend 와 같이 쓰는 공용 네트워크)
-docker compose -f docker-compose.dev.yml up -d --build --wait    # 켜기 (셋 다 healthy 가 될 때까지 기다림)
+docker compose -f docker-compose.dev.yml up -d --build --wait    # 켜기 (넷 다 healthy 가 될 때까지 기다림)
 docker compose -f docker-compose.dev.yml logs order | grep -m1 "opentelemetry-javaagent - version"   # 에이전트가 붙었는지
 docker compose -f docker-compose.dev.yml down                    # 끄기 (주문 데이터는 볼륨에 남음, 지우려면 down -v)
 
@@ -43,7 +44,7 @@ curl -X POST localhost:8091/api/orders -H 'Content-Type: application/json' \
 ```bash
 ./gradlew build                 # 5개 모듈 컴파일 + 테스트 + 서비스 4개 bootJar
 
-docker compose -f docker-compose.dev.yml up -d --wait mysql     # MySQL 만 컨테이너로
+docker compose -f docker-compose.dev.yml up -d --wait mysql pg-stub   # MySQL · 결제사 스텁만 컨테이너로
 ./gradlew :payment:bootRun      # 8092 (터미널 하나)
 ./gradlew :order:bootRun        # 8091 (터미널 둘). 뜰 때 schema.sql 로 orders 표를 만들고, MySQL 이 없으면 뜨지 않는다
 ```
@@ -52,13 +53,14 @@ compose 로 결제 · 주문을 켜 둔 상태에서 `bootRun` 을 하면 포트
 
 ## API
 
-감시 대상이라 제품 기능은 없고 호출 골격만 있다. 주문 한 건이 `order → MySQL` 과 `order → payment` 두 홉을 만든다. 파수꾼 카나리와 k6 가 이 모양을 그대로 쓴다.
+감시 대상이라 제품 기능은 없고 호출 골격만 있다. 주문 한 건이 `order → MySQL` · `order → payment` · `payment → 외부 결제사(pg-stub)` 세 홉을 만든다. 파수꾼 카나리와 k6 가 이 모양을 그대로 쓴다.
 
 | 메서드 · 경로 | 서비스 | 응답 |
 |---|---|---|
 | `POST /api/orders` `{productId, quantity, amount}` | order | 201 `{orderId, status: PAID, paymentId}` · 결제 실패 시 502 `{orderId, status: FAILED, reason}` |
 | `GET /api/orders/{id}` | order | 200 주문 한 건 · 없으면 404 `{reason}` |
-| `POST /api/payments` `{orderId, amount}` | payment (order 만 부름) | 200 `{paymentId, status: APPROVED}` · 주입 시 500 `{reason}` |
+| `POST /api/payments` `{orderId, amount}` | payment (order 만 부름) | 200 `{paymentId, status: APPROVED}` · 자체 주입 시 500 `{reason}` · 결제사 실패 시 502 `{reason: pg failure}` |
+| `POST /v1/approvals` `{orderId, amount}` | pg-stub (payment 만 부름) | 200 `{approvalId, status: APPROVED}` · 503 |
 
 에러 · 지연 주입: 주문 요청에 헤더 `X-Shop-Fault` 를 붙이면 order 가 payment 로 넘긴다. 이름과 값은 k6 와의 약속이라 바꾸면 k6 도 같이 바꾼다.
 
@@ -66,6 +68,8 @@ compose 로 결제 · 주문을 켜 둔 상태에서 `bootRun` 을 하면 포트
 |---|---|---|
 | `payment-error` | payment 500 → order 502 | 5xx 비율 규칙 시험 |
 | `payment-slow` | payment 가 2초 잠든 뒤 정상 응답 | p95 지연 규칙 시험 |
+| `pg-error` | 결제사 503 → payment 502 → order 502 | 외부 의존 장애 (우리 문제와 구분) |
+| `pg-slow` | 결제사가 1.5초 뒤 응답 | 외부 의존 지연 (콜트리에서 결제사 구간이 길어짐) |
 
 ## 부하 · 에러 주입 (k6)
 
@@ -90,6 +94,8 @@ docker run --rm --network monimo-dev -v "$PWD/k6:/scripts" -e BASE_URL=http://or
 | `GATEWAY_PORT` · `ORDER_PORT` · `PAYMENT_PORT` · `INVENTORY_PORT` | 8090 · 8091 · 8092 · 8093 | 쇼핑몰 서비스 호스트 포트 |
 | `MYSQL_USER` · `MYSQL_PASSWORD` | shop · shop | 로컬 전용 계정 |
 | `MYSQL_HOST` · `MYSQL_DATABASE` | localhost · shop | 주문 서비스가 붙는 MySQL. `bootRun` 기준 기본값이고, compose 에서는 이미지 기본값 `mysql` 을 쓴다 |
+| `PG_BASE_URL` | http://localhost:8099 | 결제 서비스가 부를 결제사 스텁 주소. `bootRun` 기준 기본값이고, compose 에서는 이미지 기본값 `http://pg-stub:8080` 을 쓴다 |
+| `PG_STUB_PORT` | 8099 | 결제사 스텁 호스트 포트 |
 | `PAYMENT_BASE_URL` | http://localhost:8092 | 주문 서비스가 부를 결제 서비스 주소. `bootRun` 기준 기본값이고, compose 에서는 이미지 기본값 `http://payment:8092` 를 쓴다 |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | http://collector:4317 | OTel Java Agent 가 보낼 수집기 gRPC 주소 (`otel/agent.properties` 와 같음, 공용 네트워크 `monimo-dev`). 다른 수집기로 보낼 때만 바꾼다 |
 | `OTEL_SERVICE_NAME` | (컨테이너별) | `shop-gateway` · `shop-order` · `shop-payment` · `shop-inventory` |
@@ -103,6 +109,7 @@ docker run --rm --network monimo-dev -v "$PWD/k6:/scripts" -e BASE_URL=http://or
 | payment | 8092 | `payment` | 결제 API |
 | inventory | 8093 | | 빈 앱 (1b) |
 | MySQL | 13306 (컨테이너 안 3306) | `mysql` | 볼륨 `shop-mysql-data` |
+| 결제사 스텁 | 8099 (컨테이너 안 8080) | `pg-stub` | WireMock, 에이전트 없음 |
 
 ## 관련 문서
 
