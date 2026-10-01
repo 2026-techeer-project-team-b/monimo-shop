@@ -1,0 +1,55 @@
+# PR · main push 마다 쇼핑몰이 빌드되고, 컨테이너로 떠서 주문을 받는지 확인한다.
+#   build : Gradle 컴파일 + 테스트
+#   smoke : compose 로 mysql · payment · order 를 이미지부터 빌드해 띄우고 k6 smoke (Dockerfile · 에이전트 부착 · compose 순서 · API 를 한 번에)
+# 이미지는 Phase 1a 라 만들기만 하고 올리지 않는다 (monimo-backend ci.yml 과 같은 정책).
+# 수집기가 없어도 쇼핑몰은 뜨므로 backend 는 받지 않는다 (에이전트는 전송 실패를 로그로만 남긴다).
+name: ci
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v6
+      - name: 빌드 + 테스트
+        run: ./gradlew build
+
+  smoke:
+    name: smoke (compose + k6)
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: 공용 네트워크 만들기
+        run: docker network create monimo-dev
+      - name: 쇼핑몰 켜기 (이미지 빌드 포함)
+        run: docker compose -f docker-compose.dev.yml up -d --build --wait
+      - name: k6 smoke (초당 1건 · 10초, checks 100% 가 아니면 실패)
+        run: |
+          docker run --rm --network monimo-dev -v "$PWD/k6:/scripts" \
+            -e BASE_URL=http://order:8091 -e RATE=1 -e DURATION=10s \
+            grafana/k6:2.3.0 run /scripts/order.js
+      - name: 실패하면 로그 보기
+        if: failure()
+        run: docker compose -f docker-compose.dev.yml logs --no-color --tail 150
+      - name: 정리
+        if: always()
+        run: docker compose -f docker-compose.dev.yml down -v
