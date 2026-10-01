@@ -113,5 +113,6 @@ docker run --rm --network monimo-dev -v "$PWD/k6:/scripts" -e BASE_URL=http://or
 ## 기여 규칙
 
 - `main` 직접 push 금지, PR로만 머지
+- PR 마다 CI(`.github/workflows/ci.yml`)가 돈다: **build**(Gradle 컴파일 + 테스트) → **smoke**(compose 로 이미지 빌드 · 기동 후 k6 초당 1건 · 10초, checks 100%)
 - 브랜치: `feat/<이슈번호>-<설명>` · `fix/<이슈번호>-<설명>` · `chore/<설명>`
 - 커밋: `<타입>(<범위>): <요약>` (타입: feat · fix · docs · chore · refactor · test)
