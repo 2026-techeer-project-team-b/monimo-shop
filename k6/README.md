@@ -20,6 +20,7 @@ docker run --rm --network monimo-dev -v "$PWD/k6:/scripts" -e BASE_URL=http://or
 | 기본 부하 | (기본값) 초당 10건 · 1분 | 정상 주문 600건 |
 | 에러 주입 (5xx 비율 규칙) | `-e ERROR_RATE=0.3 -e DURATION=2m` | 1,200건 중 360건 502 |
 | 지연 주입 (p95 지연 규칙) | `-e SLOW_RATE=0.2 -e DURATION=2m` | 1,200건 중 240건 2초 이상 |
+| 외부 결제사 장애 | `-e PG_ERROR_RATE=0.3 -e DURATION=2m` | 1,200건 중 360건 502 (결제사 503 이 원인) |
 
 로컬에 k6 가 있으면 `k6 run -e RATE=1 -e DURATION=10s k6/order.js` 도 된다(기본 주소 `http://localhost:8091`).
 
@@ -32,6 +33,10 @@ docker run --rm --network monimo-dev -v "$PWD/k6:/scripts" -e BASE_URL=http://or
 | `DURATION` | `1m` | 실행 시간 |
 | `ERROR_RATE` | 0 | 결제 실패(`X-Shop-Fault: payment-error` → 502) 비율, 0 ~ 1 |
 | `SLOW_RATE` | 0 | 결제 2초 지연(`X-Shop-Fault: payment-slow`) 비율, 0 ~ 1 |
+| `PG_ERROR_RATE` | 0 | 외부 결제사 503(`X-Shop-Fault: pg-error` → 주문 502) 비율, 0 ~ 1 |
+| `PG_SLOW_RATE` | 0 | 외부 결제사 1.5초 지연(`X-Shop-Fault: pg-slow`) 비율, 0 ~ 1 |
+
+네 비율의 합은 1 이하여야 한다. 순번 구간은 payment-error → payment-slow → pg-error → pg-slow → 정상 순서다.
 
 ## 읽는 법
 

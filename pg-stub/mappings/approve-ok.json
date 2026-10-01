@@ -1,0 +1,10 @@
+{
+  "priority": 10,
+  "request": { "method": "POST", "url": "/v1/approvals" },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": { "approvalId": "pg-{{randomValue length=8 type='ALPHANUMERIC' lowercase=true}}", "status": "APPROVED" },
+    "transformers": ["response-template"]
+  }
+}

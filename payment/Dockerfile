@@ -25,6 +25,8 @@ USER app
 
 # 서비스 이름은 여기서 기본값만 준다. compose · K8s 에서 필요하면 덮어쓴다 (agent.properties 에는 적지 않는 약속)
 ENV OTEL_SERVICE_NAME=shop-payment
+# 컨테이너 안에서 localhost 는 자기 자신이라, 결제사 스텁을 compose 서비스 이름으로 찾는다
+ENV PG_BASE_URL=http://pg-stub:8080
 
 EXPOSE 8092
 # 에이전트를 앱보다 먼저 JVM 에 올린다. -javaagent 는 반드시 -jar 앞 (뒤에 쓰면 앱 인자로 넘어가 조용히 무시된다)

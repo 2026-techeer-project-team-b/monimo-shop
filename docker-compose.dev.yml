@@ -1,7 +1,7 @@
-# 쇼핑몰 로컬 실행: MySQL + 결제 + 주문 (Phase 1a). gateway · inventory 는 1b 에 추가한다.
+# 쇼핑몰 로컬 실행: MySQL + 더미 외부 결제사(pg-stub) + 결제 + 주문 (Phase 1a). gateway · inventory 는 1b 에 추가한다.
 #
 #   docker network create monimo-dev                              # 처음 한 번만 (backend 와 같이 쓰는 공용 네트워크)
-#   docker compose -f docker-compose.dev.yml up -d --build --wait  # 켜기 (셋 다 healthy 가 될 때까지 기다림)
+#   docker compose -f docker-compose.dev.yml up -d --build --wait  # 켜기 (넷 다 healthy 가 될 때까지 기다림)
 #   docker compose -f docker-compose.dev.yml down                  # 끄기 (주문 데이터는 볼륨에 남음, 지우려면 down -v)
 #
 # 값은 .env 로 바꾼다 (.env.example 참고). 비워 두면 아래 ${이름:-기본값} 의 기본값을 쓴다.
@@ -35,6 +35,21 @@ services:
       retries: 30
       start_period: 20s
 
+  # 더미 외부 결제사. 진짜 외부 시스템처럼 에이전트를 붙이지 않는다 (서버맵에서 "밖으로 나가는 호출" 노드로 보이게).
+  # 응답 정의는 pg-stub/mappings/ 의 JSON (pg-stub/README.md)
+  pg-stub:
+    image: wiremock/wiremock:3.13.2
+    ports:
+      - "${PG_STUB_PORT:-8099}:8080"
+    volumes:
+      - ./pg-stub/mappings:/home/wiremock/mappings:ro
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "http://127.0.0.1:8080/__admin/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+
   payment:
     build:
       context: .
@@ -44,7 +59,11 @@ services:
       - "${PAYMENT_PORT:-8092}:8092"
     environment:
       # 기본은 agent.properties 의 collector:4317. .env 로 덮어쓸 때만 바뀐다
+      # PG_BASE_URL=http://pg-stub:8080 은 이미지 기본값이라 적지 않는다 (서비스 이름과 같다)
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://collector:4317}
+    depends_on:
+      pg-stub:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-fs", "http://127.0.0.1:8092/actuator/health"]
       interval: 5s
