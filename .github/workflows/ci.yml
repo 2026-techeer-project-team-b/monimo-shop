@@ -45,7 +45,7 @@ jobs:
       - name: k6 smoke (초당 1건 · 10초, checks 100% 가 아니면 실패)
         run: |
           docker run --rm --network monimo-dev -v "$PWD/k6:/scripts" \
-            -e BASE_URL=http://order:8091 -e RATE=1 -e DURATION=10s \
+            -e BASE_URL=http://gateway:8090 -e RATE=1 -e DURATION=10s \
             grafana/k6:2.3.0 run /scripts/order.js
       - name: 실패하면 로그 보기
         if: failure()
