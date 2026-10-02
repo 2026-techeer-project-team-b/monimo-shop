@@ -10,7 +10,7 @@ Phase 1a 데모 문장 "k6 로 에러를 내면 N초 안에 슬랙에 알림이 
 ```bash
 docker compose -f docker-compose.dev.yml up -d --build --wait
 
-docker run --rm --network monimo-dev -v "$PWD/k6:/scripts" -e BASE_URL=http://order:8091 \
+docker run --rm --network monimo-dev -v "$PWD/k6:/scripts" -e BASE_URL=http://gateway:8090 \
   <아래 표의 -e 값들> grafana/k6:2.3.0 run /scripts/order.js
 ```
 
@@ -22,13 +22,13 @@ docker run --rm --network monimo-dev -v "$PWD/k6:/scripts" -e BASE_URL=http://or
 | 지연 주입 (p95 지연 규칙) | `-e SLOW_RATE=0.2 -e DURATION=2m` | 1,200건 중 240건 2초 이상 |
 | 외부 결제사 장애 | `-e PG_ERROR_RATE=0.3 -e DURATION=2m` | 1,200건 중 360건 502 (결제사 503 이 원인) |
 
-로컬에 k6 가 있으면 `k6 run -e RATE=1 -e DURATION=10s k6/order.js` 도 된다(기본 주소 `http://localhost:8091`).
+로컬에 k6 가 있으면 `k6 run -e RATE=1 -e DURATION=10s k6/order.js` 도 된다(기본 주소는 게이트웨이 `http://localhost:8090`).
 
 ## 환경변수
 
 | 이름 | 기본값 | 설명 |
 |---|---|---|
-| `BASE_URL` | `http://localhost:8091` | 주문 서비스 주소. 도커로 돌릴 때는 `http://order:8091` |
+| `BASE_URL` | `http://localhost:8090` | 진입 주소(게이트웨이). 도커로 돌릴 때는 `http://gateway:8090`. 게이트웨이를 빼고 주문 서비스를 직접 치려면 `http://order:8091` |
 | `RATE` | 10 | 초당 주문 수. 응답이 느려져도 유지된다(constant-arrival-rate) |
 | `DURATION` | `1m` | 실행 시간 |
 | `ERROR_RATE` | 0 | 결제 실패(`X-Shop-Fault: payment-error` → 502) 비율, 0 ~ 1 |
