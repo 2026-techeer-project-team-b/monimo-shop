@@ -86,6 +86,10 @@ services:
       MYSQL_USER: ${MYSQL_USER:-shop}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:-shop}
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://collector:4317}
+      # 서버맵에서 order → payment 를 "우리 서비스" 로 잇는다. 에이전트는 상대 서비스 이름(peer.service)을 비워 보내는데,
+      # 비어 있으면 서버맵 집계가 주소(payment:8092)를 외부 시스템으로 분류한다(Q20). 호스트 이름이 환경마다 달라 agent.properties 가 아니라 여기 둔다.
+      # pg-stub 은 외부 결제사라 일부러 넣지 않는다. 새 서비스(1b gateway · inventory)가 생기면 짝을 쉼표로 더한다
+      OTEL_INSTRUMENTATION_COMMON_PEER_SERVICE_MAPPING: "payment=shop-payment"
     depends_on:
       # 주문은 뜰 때 schema.sql 을 실행하고, 실패하면 기동을 멈춘다(continue-on-error=false). 그래서 MySQL 이 준비된 뒤에 띄운다
       mysql:
