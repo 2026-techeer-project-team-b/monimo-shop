@@ -37,6 +37,8 @@ curl -X POST localhost:8091/api/orders -H 'Content-Type: application/json' \
   -d '{"productId":"P-100","quantity":2,"amount":15000}'
 ```
 
+서버맵에서 서비스끼리 잇는 이름은 compose 의 `OTEL_INSTRUMENTATION_COMMON_PEER_SERVICE_MAPPING`(호스트 이름 → 서비스 이름, 지금 `payment=shop-payment`)이 정한다. 비어 있으면 상대가 외부 시스템으로 잡힌다. 새 서비스가 생기면 여기에 짝을 더하고, 외부 결제사 `pg-stub` 은 넣지 않는다.
+
 데이터를 수집기까지 보내려면 monimo-backend 에서 `docker compose --profile collector up -d --wait` 로 수집기를 같이 켠다. 수집기가 꺼져 있어도 쇼핑몰은 정상으로 뜬다(에이전트는 전송 실패를 로그로만 남긴다).
 
 ### 코드만 빠르게 — Gradle (에이전트 없음)
