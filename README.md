@@ -130,3 +130,7 @@ docker run --rm --network monimo-dev -v "$PWD/k6:/scripts" -e BASE_URL=http://ga
 - PR 마다 CI(`.github/workflows/ci.yml`)가 돈다: **build**(Gradle 컴파일 + 테스트) → **smoke**(compose 로 이미지 빌드 · 기동 후 k6 초당 1건 · 10초, checks 100%)
 - 브랜치: `feat/<이슈번호>-<설명>` · `fix/<이슈번호>-<설명>` · `chore/<설명>`
 - 커밋: `<타입>(<범위>): <요약>` (타입: feat · fix · docs · chore · refactor · test)
+
+## AI 와 일한 방법 (승조 담당)
+
+이 레포는 승조(`@SeungJo-02`) 담당이고 AI(Claude Code)와 함께 만들었다. 규칙은 [`AGENTS.md`](AGENTS.md), 절차 · 역할 분담 · 토큰 기준값 · AI 가 틀린 것과 잡은 방법은 `monimo-backend` 의 [`docs/harness/`](https://github.com/2026-techeer-project-team-b/monimo-backend/blob/HEAD/docs/harness/README.md)(정본, 한 곳에만 둔다), 이 레포에서 무엇을 어떻게 물었는지는 [`docs/prompts/`](docs/prompts/README.md) 에 있다.
