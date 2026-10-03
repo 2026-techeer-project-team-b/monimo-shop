@@ -24,18 +24,20 @@
 
 ### 한 번에 켜기 — compose (에이전트 부착)
 
-MySQL · 더미 외부 결제사(pg-stub) · 결제 · 주문 네 컨테이너가 순서대로 뜬다(결제사 뒤 결제, MySQL · 결제 뒤 주문). 이미지에 OTel Java Agent(버전 `otel/AGENT_VERSION`)가 들어 있어 `collector:4317` 로 트레이스 · 메트릭 · 로그를 보낸다. 앱 코드에는 계측이 없다(ADR #33).
+MySQL · 더미 외부 결제사(pg-stub) · 결제 · 주문 · 게이트웨이 다섯 컨테이너가 순서대로 뜬다(결제사 뒤 결제, MySQL · 결제 뒤 주문, 주문 뒤 게이트웨이). 손님은 게이트웨이(8090)로 들어온다. 이미지에 OTel Java Agent(버전 `otel/AGENT_VERSION`)가 들어 있어 `collector:4317` 로 트레이스 · 메트릭 · 로그를 보낸다. 앱 코드에는 계측이 없다(ADR #33).
 
 ```bash
 docker network create monimo-dev                                 # 처음 한 번만 (backend 와 같이 쓰는 공용 네트워크)
-docker compose -f docker-compose.dev.yml up -d --build --wait    # 켜기 (넷 다 healthy 가 될 때까지 기다림)
+docker compose -f docker-compose.dev.yml up -d --build --wait    # 켜기 (다섯 다 healthy 가 될 때까지 기다림)
 docker compose -f docker-compose.dev.yml logs order | grep -m1 "opentelemetry-javaagent - version"   # 에이전트가 붙었는지
 docker compose -f docker-compose.dev.yml down                    # 끄기 (주문 데이터는 볼륨에 남음, 지우려면 down -v)
 
 # 확인
-curl -X POST localhost:8091/api/orders -H 'Content-Type: application/json' \
+curl -X POST localhost:8090/api/orders -H 'Content-Type: application/json' \
   -d '{"productId":"P-100","quantity":2,"amount":15000}'
 ```
+
+서버맵에서 서비스끼리 잇는 이름은 compose 의 `OTEL_INSTRUMENTATION_COMMON_PEER_SERVICE_MAPPING`(호스트 이름 → 서비스 이름, 지금 order 에 `payment=shop-payment`, gateway 에 `order=shop-order`)이 정한다. 비어 있으면 상대가 외부 시스템으로 잡힌다. 새 서비스가 생기면 여기에 짝을 더하고, 외부 결제사 `pg-stub` 은 넣지 않는다.
 
 데이터를 수집기까지 보내려면 monimo-backend 에서 `docker compose --profile collector up -d --wait` 로 수집기를 같이 켠다. 수집기가 꺼져 있어도 쇼핑몰은 정상으로 뜬다(에이전트는 전송 실패를 로그로만 남긴다).
 
@@ -53,10 +55,13 @@ compose 로 결제 · 주문을 켜 둔 상태에서 `bootRun` 을 하면 포트
 
 ## API
 
-감시 대상이라 제품 기능은 없고 호출 골격만 있다. 주문 한 건이 `order → MySQL` · `order → payment` · `payment → 외부 결제사(pg-stub)` 세 홉을 만든다. 파수꾼 카나리와 k6 가 이 모양을 그대로 쓴다.
+감시 대상이라 제품 기능은 없고 호출 골격만 있다. 손님은 게이트웨이로 들어오고, 주문 한 건이 `gateway → order` · `order → MySQL` · `order → payment` · `payment → 외부 결제사(pg-stub)` 네 홉을 만든다.
+
+파수꾼 카나리와 k6 가 이 모양을 그대로 쓴다.
 
 | 메서드 · 경로 | 서비스 | 응답 |
 |---|---|---|
+| `POST /api/orders` · `GET /api/orders/{id}` | gateway (입구, 8090) | 주문 서비스의 응답을 상태 코드 · 본문 그대로 돌려준다. 주문이 안 닿으면 502 `{reason: order unavailable}` |
 | `POST /api/orders` `{productId, quantity, amount}` | order | 201 `{orderId, status: PAID, paymentId}` · 결제 실패 시 502 `{orderId, status: FAILED, reason}` |
 | `GET /api/orders/{id}` | order | 200 주문 한 건 · 없으면 404 `{reason}` |
 | `POST /api/payments` `{orderId, amount}` | payment (order 만 부름) | 200 `{paymentId, status: APPROVED}` · 자체 주입 시 500 `{reason}` · 결제사 실패 시 502 `{reason: pg failure}` |
@@ -77,7 +82,7 @@ compose 로 결제 · 주문을 켜 둔 상태에서 `bootRun` 을 하면 포트
 
 ```bash
 # 초당 5건 · 20초, 그중 30% 결제 실패(502) · 10% 결제 2초 지연
-docker run --rm --network monimo-dev -v "$PWD/k6:/scripts" -e BASE_URL=http://order:8091 \
+docker run --rm --network monimo-dev -v "$PWD/k6:/scripts" -e BASE_URL=http://gateway:8090 \
   -e RATE=5 -e DURATION=20s -e ERROR_RATE=0.3 -e SLOW_RATE=0.1 \
   grafana/k6:2.3.0 run /scripts/order.js
 ```
@@ -96,6 +101,7 @@ docker run --rm --network monimo-dev -v "$PWD/k6:/scripts" -e BASE_URL=http://or
 | `MYSQL_HOST` · `MYSQL_DATABASE` | localhost · shop | 주문 서비스가 붙는 MySQL. `bootRun` 기준 기본값이고, compose 에서는 이미지 기본값 `mysql` 을 쓴다 |
 | `PG_BASE_URL` | http://localhost:8099 | 결제 서비스가 부를 결제사 스텁 주소. `bootRun` 기준 기본값이고, compose 에서는 이미지 기본값 `http://pg-stub:8080` 을 쓴다 |
 | `PG_STUB_PORT` | 8099 | 결제사 스텁 호스트 포트 |
+| `ORDER_BASE_URL` | http://localhost:8091 | 게이트웨이가 넘길 주문 서비스 주소. `bootRun` 기준 기본값이고, compose 에서는 이미지 기본값 `http://order:8091` 을 쓴다 |
 | `PAYMENT_BASE_URL` | http://localhost:8092 | 주문 서비스가 부를 결제 서비스 주소. `bootRun` 기준 기본값이고, compose 에서는 이미지 기본값 `http://payment:8092` 를 쓴다 |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | http://collector:4317 | OTel Java Agent 가 보낼 수집기 gRPC 주소 (`otel/agent.properties` 와 같음, 공용 네트워크 `monimo-dev`). 다른 수집기로 보낼 때만 바꾼다 |
 | `OTEL_SERVICE_NAME` | (컨테이너별) | `shop-gateway` · `shop-order` · `shop-payment` · `shop-inventory` |
@@ -104,7 +110,7 @@ docker run --rm --network monimo-dev -v "$PWD/k6:/scripts" -e BASE_URL=http://or
 
 | 서비스 | 포트 | compose 서비스 이름 | 상태 |
 |---|---|---|---|
-| gateway | 8090 | | 빈 앱 (1b) |
+| gateway | 8090 | `gateway` | 입구. 주문 API 를 주문 서비스로 넘긴다 |
 | order | 8091 | `order` | 주문 API |
 | payment | 8092 | `payment` | 결제 API |
 | inventory | 8093 | | 빈 앱 (1b) |
@@ -119,7 +125,8 @@ docker run --rm --network monimo-dev -v "$PWD/k6:/scripts" -e BASE_URL=http://or
 
 ## 기여 규칙
 
-- `main` 직접 push 금지, PR로만 머지
+- 브랜치 전략: 기능 브랜치 → `develop`(기본 브랜치, 작업을 모으는 곳) → 배포 단위로 `develop` → `main`
+- `main` · `develop` 직접 push 금지, PR로만 머지. PR 의 base 는 기본값(`develop`) 그대로 두면 된다
 - PR 마다 CI(`.github/workflows/ci.yml`)가 돈다: **build**(Gradle 컴파일 + 테스트) → **smoke**(compose 로 이미지 빌드 · 기동 후 k6 초당 1건 · 10초, checks 100%)
 - 브랜치: `feat/<이슈번호>-<설명>` · `fix/<이슈번호>-<설명>` · `chore/<설명>`
 - 커밋: `<타입>(<범위>): <요약>` (타입: feat · fix · docs · chore · refactor · test)

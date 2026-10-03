@@ -1,7 +1,7 @@
-# 쇼핑몰 로컬 실행: MySQL + 더미 외부 결제사(pg-stub) + 결제 + 주문 (Phase 1a). gateway · inventory 는 1b 에 추가한다.
+# 쇼핑몰 로컬 실행: MySQL + 더미 외부 결제사(pg-stub) + 결제 + 주문 + 게이트웨이(입구). inventory 는 다음 이슈에서 추가한다.
 #
 #   docker network create monimo-dev                              # 처음 한 번만 (backend 와 같이 쓰는 공용 네트워크)
-#   docker compose -f docker-compose.dev.yml up -d --build --wait  # 켜기 (넷 다 healthy 가 될 때까지 기다림)
+#   docker compose -f docker-compose.dev.yml up -d --build --wait  # 켜기 (다섯 다 healthy 가 될 때까지 기다림)
 #   docker compose -f docker-compose.dev.yml down                  # 끄기 (주문 데이터는 볼륨에 남음, 지우려면 down -v)
 #
 # 값은 .env 로 바꾼다 (.env.example 참고). 비워 두면 아래 ${이름:-기본값} 의 기본값을 쓴다.
@@ -86,6 +86,10 @@ services:
       MYSQL_USER: ${MYSQL_USER:-shop}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:-shop}
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://collector:4317}
+      # 서버맵에서 order → payment 를 "우리 서비스" 로 잇는다. 에이전트는 상대 서비스 이름(peer.service)을 비워 보내는데,
+      # 비어 있으면 서버맵 집계가 주소(payment:8092)를 외부 시스템으로 분류한다(Q20). 호스트 이름이 환경마다 달라 agent.properties 가 아니라 여기 둔다.
+      # pg-stub 은 외부 결제사라 일부러 넣지 않는다. 새 서비스(1b gateway · inventory)가 생기면 짝을 쉼표로 더한다
+      OTEL_INSTRUMENTATION_COMMON_PEER_SERVICE_MAPPING: "payment=shop-payment"
     depends_on:
       # 주문은 뜰 때 schema.sql 을 실행하고, 실패하면 기동을 멈춘다(continue-on-error=false). 그래서 MySQL 이 준비된 뒤에 띄운다
       mysql:
@@ -94,6 +98,29 @@ services:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-fs", "http://127.0.0.1:8091/actuator/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  # 입구. 손님(k6 · 파수꾼 카나리)은 여기(8090)로 들어온다. /api/orders 를 주문 서비스로 그대로 넘기기만 한다
+  gateway:
+    build:
+      context: .
+      dockerfile: gateway/Dockerfile
+    image: monimo/shop-gateway:dev
+    ports:
+      - "${GATEWAY_PORT:-8090}:8090"
+    environment:
+      # ORDER_BASE_URL=http://order:8091 은 이미지 기본값이라 적지 않는다 (서비스 이름과 같다)
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://collector:4317}
+      # gateway → order 를 서버맵에서 우리 서비스로 잇는다 (없으면 order:8091 이 외부로 잡힌다)
+      OTEL_INSTRUMENTATION_COMMON_PEER_SERVICE_MAPPING: "order=shop-order"
+    depends_on:
+      order:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "http://127.0.0.1:8090/actuator/health"]
       interval: 5s
       timeout: 5s
       retries: 30

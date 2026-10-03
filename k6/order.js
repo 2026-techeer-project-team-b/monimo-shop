@@ -4,7 +4,7 @@
 // 비율은 난수가 아니라 요청 순번으로 정한다. ERROR_RATE=0.3 이면 100건 중 정확히 30건이 502 라서, 알림 규칙 시험 때 대조할 수 있다.
 //
 // 실행 (레포 루트, compose 로 쇼핑몰을 켠 뒤):
-//   docker run --rm --network monimo-dev -v "$PWD/k6:/scripts" -e BASE_URL=http://order:8091 \
+//   docker run --rm --network monimo-dev -v "$PWD/k6:/scripts" -e BASE_URL=http://gateway:8090 \
 //     grafana/k6:2.3.0 run /scripts/order.js
 // 값 바꾸기: -e RATE=5 -e DURATION=20s -e ERROR_RATE=0.3 -e SLOW_RATE=0.1 -e PG_ERROR_RATE=0.1 -e PG_SLOW_RATE=0.1
 
@@ -12,7 +12,7 @@ import http from 'k6/http';
 import { check } from 'k6';
 import exec from 'k6/execution';
 
-const BASE_URL = __ENV.BASE_URL || 'http://localhost:8091';
+const BASE_URL = __ENV.BASE_URL || 'http://localhost:8090'; // 게이트웨이(입구). 주문 서비스를 직접 치려면 8091
 const RATE = Number(__ENV.RATE || 10); // 초당 주문 수
 const DURATION = __ENV.DURATION || '1m';
 const ERROR_RATE = Number(__ENV.ERROR_RATE || 0); // 0 ~ 1. payment-error 로 502 를 낼 비율
