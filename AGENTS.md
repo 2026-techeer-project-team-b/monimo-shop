@@ -69,7 +69,7 @@ CI 는 **build**(Gradle 컴파일 + 테스트) → **smoke**(compose 로 띄운 
 - 더미 외부 결제사 pg-stub 호출과 `pg-error` · `pg-slow` 주입 (`#20`)
 - 서버맵에서 order → payment 가 외부로 잡히던 문제를 peer-service-mapping 으로 해결 (`#23`)
 - 얇은 게이트웨이. 진입 주소를 8090 으로 (`#25`)
-- `AGENTS.md` · `CLAUDE.md`, README 「AI 와 일한 방법」 절, `docs/prompts/`(프롬프트 로그 — 코드와 같은 PR 에). 하네스 정본은 backend `docs/harness/README.md` 한 곳
+- `AGENTS.md` · `CLAUDE.md`, README 「AI 와 일한 방법」 절, `docs/prompts/`(프롬프트 로그 : 코드와 같은 PR 에). 하네스 정본은 backend `docs/seungjo/harness.md` 한 곳
 
 ## 6. 지금 막혀 있는 것
 
