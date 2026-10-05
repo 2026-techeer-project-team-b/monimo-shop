@@ -61,6 +61,10 @@ services:
       # 기본은 agent.properties 의 collector:4317. .env 로 덮어쓸 때만 바뀐다
       # PG_BASE_URL=http://pg-stub:8080 은 이미지 기본값이라 적지 않는다 (서비스 이름과 같다)
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://collector:4317}
+      # 에이전트 이름표(service.instance.id). 안 주면 에이전트가 뜰 때마다 랜덤 UUID 를 만들어 재시작할 때마다 새 에이전트처럼 보인다(#30).
+      # 백엔드는 이 값을 agent_id 로 쓴다. K8s 에서는 Downward API 로 파드 이름을 넣고(README), compose 엔 파드가 없어 이름을 직접 적는다.
+      # agent.properties 의 같은 키를 통째로 덮으므로 deployment.environment.name=local 도 같이 적는다
+      OTEL_RESOURCE_ATTRIBUTES: "service.instance.id=shop-payment-local-1,deployment.environment.name=local"
     depends_on:
       pg-stub:
         condition: service_healthy
@@ -86,6 +90,8 @@ services:
       MYSQL_USER: ${MYSQL_USER:-shop}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:-shop}
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://collector:4317}
+      # 에이전트 이름표. 재시작해도 그대로 (payment 설명 참고, #30)
+      OTEL_RESOURCE_ATTRIBUTES: "service.instance.id=shop-order-local-1,deployment.environment.name=local"
       # 서버맵에서 order → payment 를 "우리 서비스" 로 잇는다. 에이전트는 상대 서비스 이름(peer.service)을 비워 보내는데,
       # 비어 있으면 서버맵 집계가 주소(payment:8092)를 외부 시스템으로 분류한다(Q20). 호스트 이름이 환경마다 달라 agent.properties 가 아니라 여기 둔다.
       # pg-stub 은 외부 결제사라 일부러 넣지 않는다. 새 서비스(1b gateway · inventory)가 생기면 짝을 쉼표로 더한다
@@ -114,6 +120,8 @@ services:
     environment:
       # ORDER_BASE_URL=http://order:8091 은 이미지 기본값이라 적지 않는다 (서비스 이름과 같다)
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://collector:4317}
+      # 에이전트 이름표. 재시작해도 그대로 (payment 설명 참고, #30)
+      OTEL_RESOURCE_ATTRIBUTES: "service.instance.id=shop-gateway-local-1,deployment.environment.name=local"
       # gateway → order 를 서버맵에서 우리 서비스로 잇는다 (없으면 order:8091 이 외부로 잡힌다)
       OTEL_INSTRUMENTATION_COMMON_PEER_SERVICE_MAPPING: "order=shop-order"
     depends_on:

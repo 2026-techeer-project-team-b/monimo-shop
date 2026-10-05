@@ -39,6 +39,22 @@ curl -X POST localhost:8090/api/orders -H 'Content-Type: application/json' \
 
 서버맵에서 서비스끼리 잇는 이름은 compose 의 `OTEL_INSTRUMENTATION_COMMON_PEER_SERVICE_MAPPING`(호스트 이름 → 서비스 이름, 지금 order 에 `payment=shop-payment`, gateway 에 `order=shop-order`)이 정한다. 비어 있으면 상대가 외부 시스템으로 잡힌다. 새 서비스가 생기면 여기에 짝을 더하고, 외부 결제사 `pg-stub` 은 넣지 않는다.
 
+에이전트 이름표(`service.instance.id`)는 compose 의 `OTEL_RESOURCE_ATTRIBUTES` 가 정한다(`shop-order-local-1` 처럼). 안 주면 에이전트가 뜰 때마다 랜덤 UUID 를 만들어, 재시작할 때마다 백엔드 화면에 새 에이전트가 붙은 것처럼 보인다(`#30`). 백엔드는 이 값을 `agent_id` 로 쓴다. 같은 키라 `agent.properties` 의 `deployment.environment.name=local` 을 통째로 덮으므로 함께 적는다.
+
+쿠버네티스에서는 Downward API 로 파드 이름을 넣는다. `POD_NAME` 을 **먼저** 정의해야 아래 줄의 `$(POD_NAME)` 이 바뀐다(순서가 틀리면 글자 그대로 들어가고 경고도 없다). 컨테이너만 재시작하면 이름이 그대로고, 배포로 파드가 새로 뜨면 새 이름이 된다.
+
+```yaml
+env:
+  - name: POD_NAME
+    valueFrom: { fieldRef: { fieldPath: metadata.name } }
+  - name: POD_NAMESPACE
+    valueFrom: { fieldRef: { fieldPath: metadata.namespace } }
+  - name: OTEL_RESOURCE_ATTRIBUTES   # 반드시 위 두 개보다 아래
+    value: "service.instance.id=$(POD_NAME),k8s.pod.name=$(POD_NAME),k8s.namespace.name=$(POD_NAMESPACE),deployment.environment.name=<환경>"
+```
+
+이름은 파드 이름 그대로 쓴다. 같은 백엔드로 두 네임스페이스(staging · prod)의 쇼핑몰이 같이 들어오게 되면 `$(POD_NAMESPACE).$(POD_NAME)` 으로 바꾼다. 결정 과정은 [`docs/seungjo/30-service-instance-id/`](docs/seungjo/30-service-instance-id/README.md).
+
 데이터를 수집기까지 보내려면 monimo-backend 에서 `docker compose --profile collector up -d --wait` 로 수집기를 같이 켠다. 수집기가 꺼져 있어도 쇼핑몰은 정상으로 뜬다(에이전트는 전송 실패를 로그로만 남긴다).
 
 ### 코드만 빠르게 — Gradle (에이전트 없음)
@@ -105,6 +121,7 @@ docker run --rm --network monimo-dev -v "$PWD/k6:/scripts" -e BASE_URL=http://ga
 | `PAYMENT_BASE_URL` | http://localhost:8092 | 주문 서비스가 부를 결제 서비스 주소. `bootRun` 기준 기본값이고, compose 에서는 이미지 기본값 `http://payment:8092` 를 쓴다 |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | http://collector:4317 | OTel Java Agent 가 보낼 수집기 gRPC 주소 (`otel/agent.properties` 와 같음, 공용 네트워크 `monimo-dev`). 다른 수집기로 보낼 때만 바꾼다 |
 | `OTEL_SERVICE_NAME` | (컨테이너별) | `shop-gateway` · `shop-order` · `shop-payment` · `shop-inventory` |
+| `OTEL_RESOURCE_ATTRIBUTES` | (컨테이너별) | 에이전트 이름표와 환경. compose 는 `service.instance.id=shop-<서비스>-local-1,deployment.environment.name=local`, 쿠버네티스는 Downward API 로 파드 이름 (위 「한 번에 켜기」) |
 
 ## 포트
 

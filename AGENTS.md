@@ -69,13 +69,13 @@ CI 는 **build**(Gradle 컴파일 + 테스트) → **smoke**(compose 로 띄운 
 - 더미 외부 결제사 pg-stub 호출과 `pg-error` · `pg-slow` 주입 (`#20`)
 - 서버맵에서 order → payment 가 외부로 잡히던 문제를 peer-service-mapping 으로 해결 (`#23`)
 - 얇은 게이트웨이. 진입 주소를 8090 으로 (`#25`)
+- 에이전트 이름표 `service.instance.id` 를 환경변수로 고정. compose 는 `shop-<서비스>-local-1`, 쿠버네티스는 Downward API 로 파드 이름 (`#30`). 재시작해도 `agent_id` 가 그대로다
 - `AGENTS.md` · `CLAUDE.md`, README 「AI 와 일한 방법」 절, `docs/prompts/`(프롬프트 로그 : 코드와 같은 PR 에). 하네스 정본은 backend `docs/seungjo/harness.md` 한 곳
 
 ## 6. 지금 막혀 있는 것
 
 | 무엇 | 안 풀면 |
 |---|---|
-| 에이전트가 `service.instance.id` 를 채우지 않는다 | 적재 처리기가 파드 식별자를 `service.instance.id` → `k8s.pod.name` → `host.name` 순으로 고른다 (backend `#58`). 첫 번째를 쇼핑몰이 채워 주기로 했다 |
 | `inventory/` 가 빈 앱이다 | 서버맵에 재고 노드가 없다 (1b) |
 | `README.md` 폴더 구성 표가 낡았다 | `gateway/` 가 "1b에 추가"로 적혀 있지만 `#25` 로 이미 들어왔다 |
 
