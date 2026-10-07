@@ -19,3 +19,7 @@ spring:
 # 결제 서비스 주소. 컨테이너끼리는 http://payment:8092 (4단계 compose 에서 덮어씀)
 payment:
   base-url: ${PAYMENT_BASE_URL:http://localhost:8092}
+
+# 재고 서비스 주소. 컨테이너끼리는 http://inventory:8093 (order/Dockerfile 기본값)
+inventory:
+  base-url: ${INVENTORY_BASE_URL:http://localhost:8093}

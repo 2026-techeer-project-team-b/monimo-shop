@@ -1,8 +1,8 @@
-# 쇼핑몰 로컬 실행: MySQL + 더미 외부 결제사(pg-stub) + 결제 + 주문 + 게이트웨이(입구). inventory 는 다음 이슈에서 추가한다.
+# 쇼핑몰 로컬 실행: MySQL + Redis + 더미 외부 결제사(pg-stub) + 결제 + 재고 + 주문 + 게이트웨이(입구).
 #
 #   docker network create monimo-dev                              # 처음 한 번만 (backend 와 같이 쓰는 공용 네트워크)
-#   docker compose -f docker-compose.dev.yml up -d --build --wait  # 켜기 (다섯 다 healthy 가 될 때까지 기다림)
-#   docker compose -f docker-compose.dev.yml down                  # 끄기 (주문 데이터는 볼륨에 남음, 지우려면 down -v)
+#   docker compose -f docker-compose.dev.yml up -d --build --wait  # 켜기 (일곱 다 healthy 가 될 때까지 기다림)
+#   docker compose -f docker-compose.dev.yml down                  # 끄기 (주문 · 재고 데이터는 볼륨에 남음, 지우려면 down -v)
 #
 # 값은 .env 로 바꾼다 (.env.example 참고). 비워 두면 아래 ${이름:-기본값} 의 기본값을 쓴다.
 # 에이전트는 이미지에 들어 있어 collector:4317 로 보낸다. 수집기는 monimo-backend 에서 --profile collector 로 켠다.
@@ -34,6 +34,18 @@ services:
       timeout: 5s
       retries: 30
       start_period: 20s
+
+  # 재고 조회 캐시. 7.2 는 BSD 라이선스의 마지막 줄 (7.4 부터 RSAL/SSPL). 데이터는 남기지 않는다 (캐시라 잃어도 MySQL 에서 다시 채운다)
+  redis:
+    image: redis:7.2
+    ports:
+      - "${REDIS_PORT:-16379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 5s
 
   # 더미 외부 결제사. 진짜 외부 시스템처럼 에이전트를 붙이지 않는다 (서버맵에서 "밖으로 나가는 호출" 노드로 보이게).
   # 응답 정의는 pg-stub/mappings/ 의 JSON (pg-stub/README.md)
@@ -76,6 +88,35 @@ services:
       # 에이전트가 계측 코드를 심느라 기동이 몇 초 느려진다
       start_period: 30s
 
+  inventory:
+    build:
+      context: .
+      dockerfile: inventory/Dockerfile
+    image: monimo/shop-inventory:dev
+    ports:
+      - "${INVENTORY_PORT:-8093}:8093"
+    environment:
+      # MYSQL_HOST=mysql · REDIS_HOST=redis 는 이미지 기본값이라 적지 않는다 (서비스 이름과 같다)
+      MYSQL_PORT: "3306"
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-shop}
+      MYSQL_USER: ${MYSQL_USER:-shop}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-shop}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://collector:4317}
+      # 에이전트 이름표. 재시작해도 그대로 (payment 설명 참고, #30)
+      OTEL_RESOURCE_ATTRIBUTES: "service.instance.id=shop-inventory-local-1,deployment.environment.name=local"
+      # Redis 는 peer 매핑에 넣지 않는다. 넣으면 서버맵이 Redis 를 DB 가 아니라 우리 서비스로 잘못 그린다 (#32)
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "http://127.0.0.1:8093/actuator/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
   order:
     build:
       context: .
@@ -84,7 +125,7 @@ services:
     ports:
       - "${ORDER_PORT:-8091}:8091"
     environment:
-      # MYSQL_HOST=mysql · PAYMENT_BASE_URL=http://payment:8092 는 이미지 기본값이라 적지 않는다 (서비스 이름과 같다)
+      # MYSQL_HOST=mysql · INVENTORY_BASE_URL=http://inventory:8093 · PAYMENT_BASE_URL=http://payment:8092 는 이미지 기본값이라 적지 않는다
       MYSQL_PORT: "3306"
       MYSQL_DATABASE: ${MYSQL_DATABASE:-shop}
       MYSQL_USER: ${MYSQL_USER:-shop}
@@ -94,11 +135,13 @@ services:
       OTEL_RESOURCE_ATTRIBUTES: "service.instance.id=shop-order-local-1,deployment.environment.name=local"
       # 서버맵에서 order → payment 를 "우리 서비스" 로 잇는다. 에이전트는 상대 서비스 이름(peer.service)을 비워 보내는데,
       # 비어 있으면 서버맵 집계가 주소(payment:8092)를 외부 시스템으로 분류한다(Q20). 호스트 이름이 환경마다 달라 agent.properties 가 아니라 여기 둔다.
-      # pg-stub 은 외부 결제사라 일부러 넣지 않는다. 새 서비스(1b gateway · inventory)가 생기면 짝을 쉼표로 더한다
-      OTEL_INSTRUMENTATION_COMMON_PEER_SERVICE_MAPPING: "payment=shop-payment"
+      # pg-stub 은 외부 결제사라 일부러 넣지 않는다. Redis · MySQL 도 넣지 않는다 (DB 는 db.system 으로 가려진다)
+      OTEL_INSTRUMENTATION_COMMON_PEER_SERVICE_MAPPING: "payment=shop-payment,inventory=shop-inventory"
     depends_on:
       # 주문은 뜰 때 schema.sql 을 실행하고, 실패하면 기동을 멈춘다(continue-on-error=false). 그래서 MySQL 이 준비된 뒤에 띄운다
       mysql:
+        condition: service_healthy
+      inventory:
         condition: service_healthy
       payment:
         condition: service_healthy
@@ -109,7 +152,7 @@ services:
       retries: 30
       start_period: 30s
 
-  # 입구. 손님(k6 · 파수꾼 카나리)은 여기(8090)로 들어온다. /api/orders 를 주문 서비스로 그대로 넘기기만 한다
+  # 입구. 손님(k6 · 파수꾼 카나리)은 여기(8090)로 들어온다. /api/orders 는 주문, /api/stock 은 재고 서비스로 그대로 넘기기만 한다
   gateway:
     build:
       context: .
@@ -118,12 +161,12 @@ services:
     ports:
       - "${GATEWAY_PORT:-8090}:8090"
     environment:
-      # ORDER_BASE_URL=http://order:8091 은 이미지 기본값이라 적지 않는다 (서비스 이름과 같다)
+      # ORDER_BASE_URL=http://order:8091 · INVENTORY_BASE_URL=http://inventory:8093 은 이미지 기본값이라 적지 않는다
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://collector:4317}
       # 에이전트 이름표. 재시작해도 그대로 (payment 설명 참고, #30)
       OTEL_RESOURCE_ATTRIBUTES: "service.instance.id=shop-gateway-local-1,deployment.environment.name=local"
-      # gateway → order 를 서버맵에서 우리 서비스로 잇는다 (없으면 order:8091 이 외부로 잡힌다)
-      OTEL_INSTRUMENTATION_COMMON_PEER_SERVICE_MAPPING: "order=shop-order"
+      # gateway → order · inventory 를 서버맵에서 우리 서비스로 잇는다 (없으면 order:8091 이 외부로 잡힌다)
+      OTEL_INSTRUMENTATION_COMMON_PEER_SERVICE_MAPPING: "order=shop-order,inventory=shop-inventory"
     depends_on:
       order:
         condition: service_healthy

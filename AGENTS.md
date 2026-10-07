@@ -22,10 +22,10 @@ Kotlin 2.2 · Java 17 · Spring Boot 3.5 · Gradle 멀티모듈. 버전은 `grad
 
 | 폴더 | 하는 일 | 포트 |
 |---|---|---|
-| `gateway/` | 입구. `/api/orders` 를 주문 서비스로 그대로 넘긴다 | 8090 |
+| `gateway/` | 입구. `/api/orders` 는 주문, `GET /api/stock` 은 재고 서비스로 그대로 넘긴다 | 8090 |
 | `order/` | 주문. MySQL 에 저장하고 결제를 부른다 | 8091 |
 | `payment/` | 결제. 외부 결제사(pg-stub)를 부른다 | 8092 |
-| `inventory/` | 재고. 빈 앱 (1b) | 8093 |
+| `inventory/` | 재고. MySQL(stock) + Redis 조회 캐시 | 8093 |
 | `agent-extension/` | 스레드 덤프 명령 수신 Extension. 우리가 만드는 유일한 에이전트 코드 | — |
 | `otel/` | OTel Java Agent 설정(`agent.properties`)과 버전 고정 | — |
 | `k6/` | 부하 · 에러 주입 시나리오 | — |
@@ -70,14 +70,15 @@ CI 는 **build**(Gradle 컴파일 + 테스트) → **smoke**(compose 로 띄운 
 - 서버맵에서 order → payment 가 외부로 잡히던 문제를 peer-service-mapping 으로 해결 (`#23`)
 - 얇은 게이트웨이. 진입 주소를 8090 으로 (`#25`)
 - 에이전트 이름표 `service.instance.id` 를 환경변수로 고정. compose 는 `shop-<서비스>-local-1`, 쿠버네티스는 Downward API 로 파드 이름 (`#30`). 재시작해도 `agent_id` 가 그대로다
+- 재고 서비스 + Redis 캐시 (`#32`). 주문이 결제 전에 재고를 조건부 UPDATE 로 차감하고 모자라면 409, 결제 실패면 복원(주문 번호로 한 번만). 조회만 cache-aside, Redis 헬스체크는 끔(고아 스팬), timeout 500ms + DB 폴백. k6 에 재고 조회 손님 · inventory-slow · inventory-error · 품절 추가
 - `AGENTS.md` · `CLAUDE.md`, README 「AI 와 일한 방법」 절, `docs/prompts/`(프롬프트 로그 : 코드와 같은 PR 에). 하네스 정본은 backend `docs/seungjo/harness.md` 한 곳
 
 ## 6. 지금 막혀 있는 것
 
 | 무엇 | 안 풀면 |
 |---|---|
-| `inventory/` 가 빈 앱이다 | 서버맵에 재고 노드가 없다 (1b) |
-| `README.md` 폴더 구성 표가 낡았다 | `gateway/` 가 "1b에 추가"로 적혀 있지만 `#25` 로 이미 들어왔다 |
+| 에이전트 3.0 이 오면 서버맵의 DB 분류가 깨진다 | 새 버전은 `db.system` 대신 `db.system.name` 을 붙이는데 backend `mv_server_map_1m` 은 `db.system` 만 본다. 에이전트를 올리기 전에 backend 가 두 키를 다 보게 해야 한다 (`#32` research 2.2) |
+| Redis 연결을 맺을 때 부모 없는 스팬 3개(`HELLO` · `CLIENT SETINFO`)가 남는다 | 앱 시작 · 재연결 때만 생겨 양이 작다. 헬스체크 `INFO` 는 `#32` 에서 껐다 |
 
 ## 7. 참고
 
