@@ -13,7 +13,7 @@
 | `order/` | 주문 (1a) |
 | `payment/` | 결제 (1a) |
 | `inventory/` | 재고 (1b). MySQL `stock` 표 + Redis 조회 캐시 |
-| `agent-extension/` | 스레드 덤프 명령 수신 Extension (우리가 만드는 유일한 에이전트 코드) |
+| `agent-extension/` | 스레드 덤프 명령 수신 Extension (Java, 우리가 만드는 유일한 에이전트 코드). [`agent-extension/README.md`](agent-extension/README.md) |
 | `otel/` | OTel Java Agent 설정 · 버전 고정 — `agent.properties`(전송 gRPC · 수집기 `collector:4317` · 샘플러 always_on) · `AGENT_VERSION` |
 | `k6/` | 부하 · 에러 주입 시나리오 |
 | `pg-stub/` | 더미 외부 결제사 (WireMock 응답 정의, 에이전트 없음) |
@@ -59,6 +59,8 @@ env:
 ```
 
 이름은 파드 이름 그대로 쓴다. 같은 백엔드로 두 네임스페이스(staging · prod)의 쇼핑몰이 같이 들어오게 되면 `$(POD_NAMESPACE).$(POD_NAME)` 으로 바꾼다. 결정 과정은 [`docs/seungjo/30-service-instance-id/`](docs/seungjo/30-service-instance-id/README.md).
+
+스레드 덤프 Extension(`agent-extension.jar`)도 네 이미지에 들어 있다. 수집기(`collector:8081`)에 명령을 받으러 가는데, 수집기가 꺼져 있으면 1 → 60초 간격으로 다시 물을 뿐 쇼핑몰은 정상으로 뜬다. 토큰은 `OTEL_MONIMO_AGENT_TOKEN`(기본 `local-agent-token`, 수집기 `MONIMO_AGENT_TOKEN` 과 같아야 함). 덤프를 손으로 떠 보는 법은 [`agent-extension/README.md`](agent-extension/README.md).
 
 데이터를 수집기까지 보내려면 monimo-backend 에서 `docker compose --profile collector up -d --wait` 로 수집기를 같이 켠다. 수집기가 꺼져 있어도 쇼핑몰은 정상으로 뜬다(에이전트는 전송 실패를 로그로만 남긴다).
 
@@ -135,6 +137,7 @@ docker run --rm --network monimo-dev -v "$PWD/k6:/scripts" -e BASE_URL=http://ga
 | `PAYMENT_BASE_URL` | http://localhost:8092 | 주문 서비스가 부를 결제 서비스 주소. `bootRun` 기준 기본값이고, compose 에서는 이미지 기본값 `http://payment:8092` 를 쓴다 |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | http://collector:4317 | OTel Java Agent 가 보낼 수집기 gRPC 주소 (`otel/agent.properties` 와 같음, 공용 네트워크 `monimo-dev`). 다른 수집기로 보낼 때만 바꾼다 |
 | `OTEL_SERVICE_NAME` | (컨테이너별) | `shop-gateway` · `shop-order` · `shop-payment` · `shop-inventory` |
+| `MONIMO_AGENT_TOKEN` | local-agent-token | 스레드 덤프 Extension 이 수집기에 붙이는 토큰 (compose 가 `OTEL_MONIMO_AGENT_TOKEN` 으로 넘김). 수집기 값과 같아야 한다 |
 | `OTEL_RESOURCE_ATTRIBUTES` | (컨테이너별) | 에이전트 이름표와 환경. compose 는 `service.instance.id=shop-<서비스>-local-1,deployment.environment.name=local`, 쿠버네티스는 Downward API 로 파드 이름 (위 「한 번에 켜기」) |
 
 ## 포트
