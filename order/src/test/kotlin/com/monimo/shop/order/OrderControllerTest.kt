@@ -13,7 +13,7 @@ import org.springframework.test.web.servlet.post
 import java.time.LocalDateTime
 
 /**
- * 컨트롤러가 서비스 결과를 올바른 HTTP 상태로 바꾸는지만 본다 (201 · 502 · 200 · 404).
+ * 컨트롤러가 서비스 결과를 올바른 HTTP 상태로 바꾸는지만 본다 (201 · 409 · 502 · 200 · 404).
  * MySQL · payment 없이 돌도록 OrderService 는 Mockito 가짜로 바꾼다. 실제 DB · HTTP 흐름은 PR #10 의 curl 로 확인했다.
  */
 @WebMvcTest(OrderController::class)
@@ -50,6 +50,40 @@ class OrderControllerTest(mvc: MockMvc, service: OrderService) : BehaviorSpec({
                 }.andExpect {
                     status { isBadGateway() }
                     jsonPath("$.status") { value("FAILED") }
+                }
+            }
+        }
+    }
+
+    Given("주문 생성 — 재고") {
+        val soldOut = CreateOrderRequest(productId = "P-SOLDOUT", quantity = 1, amount = 1000)
+        When("재고가 모자라면") {
+            Mockito.`when`(service.create(soldOut, null))
+                .thenReturn(CreateOrderResponse(3, OrderStatus.SOLD_OUT, reason = "sold out"))
+
+            Then("409 이고 status 가 SOLD_OUT 이다 — 4xx 비율 규칙이 잡을 수 있게") {
+                mvc.post("/api/orders") {
+                    contentType = MediaType.APPLICATION_JSON
+                    content = """{"productId":"P-SOLDOUT","quantity":1,"amount":1000}"""
+                }.andExpect {
+                    status { isConflict() }
+                    jsonPath("$.status") { value("SOLD_OUT") }
+                    jsonPath("$.reason") { value("sold out") }
+                }
+            }
+        }
+        When("재고 서비스가 죽어 있으면 (X-Shop-Fault: inventory-error)") {
+            Mockito.`when`(service.create(req, "inventory-error"))
+                .thenReturn(CreateOrderResponse(4, OrderStatus.FAILED, reason = "inventory error"))
+
+            Then("502 이고 reason 이 inventory error 다") {
+                mvc.post("/api/orders") {
+                    contentType = MediaType.APPLICATION_JSON
+                    content = body
+                    header(PaymentClient.FAULT_HEADER, "inventory-error")
+                }.andExpect {
+                    status { isBadGateway() }
+                    jsonPath("$.reason") { value("inventory error") }
                 }
             }
         }

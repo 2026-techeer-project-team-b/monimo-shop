@@ -21,6 +21,10 @@ docker run --rm --network monimo-dev -v "$PWD/k6:/scripts" -e BASE_URL=http://ga
 | 에러 주입 (5xx 비율 규칙) | `-e ERROR_RATE=0.3 -e DURATION=2m` | 1,200건 중 360건 502 |
 | 지연 주입 (p95 지연 규칙) | `-e SLOW_RATE=0.2 -e DURATION=2m` | 1,200건 중 240건 2초 이상 |
 | 외부 결제사 장애 | `-e PG_ERROR_RATE=0.3 -e DURATION=2m` | 1,200건 중 360건 502 (결제사 503 이 원인) |
+| 재고 서비스 장애 | `-e INVENTORY_ERROR_RATE=0.3 -e DURATION=2m` | 1,200건 중 360건 502 (재고 500 이 원인, 결제는 안 부른다) |
+| 재고 서비스 지연 | `-e INVENTORY_SLOW_RATE=0.2 -e DURATION=2m` | 1,200건 중 240건 1.5초 이상 |
+| 품절 (4xx 비율 규칙) | `-e SOLDOUT_RATE=0.3 -e DURATION=2m` | 1,200건 중 360건 409 (재고 0 인 `P-SOLDOUT` 주문) |
+| 재고 조회 끄기 | `-e STOCK_LOOKUP_RATE=0` | 주문만. 서버맵에 inventory → Redis 화살표가 안 생긴다 |
 
 로컬에 k6 가 있으면 `k6 run -e RATE=1 -e DURATION=10s k6/order.js` 도 된다(기본 주소는 게이트웨이 `http://localhost:8090`).
 
@@ -35,8 +39,12 @@ docker run --rm --network monimo-dev -v "$PWD/k6:/scripts" -e BASE_URL=http://ga
 | `SLOW_RATE` | 0 | 결제 2초 지연(`X-Shop-Fault: payment-slow`) 비율, 0 ~ 1 |
 | `PG_ERROR_RATE` | 0 | 외부 결제사 503(`X-Shop-Fault: pg-error` → 주문 502) 비율, 0 ~ 1 |
 | `PG_SLOW_RATE` | 0 | 외부 결제사 1.5초 지연(`X-Shop-Fault: pg-slow`) 비율, 0 ~ 1 |
+| `INVENTORY_ERROR_RATE` | 0 | 재고 서비스 500(`X-Shop-Fault: inventory-error` → 주문 502) 비율, 0 ~ 1 |
+| `INVENTORY_SLOW_RATE` | 0 | 재고 서비스 1.5초 지연(`X-Shop-Fault: inventory-slow`) 비율, 0 ~ 1 |
+| `SOLDOUT_RATE` | 0 | 품절 상품 `P-SOLDOUT` 주문(→ 409 `SOLD_OUT`) 비율, 0 ~ 1. 헤더가 아니라 상품으로 만든다 |
+| `STOCK_LOOKUP_RATE` | 0.5 | 주문 전에 `GET /api/stock/{id}` 로 재고를 먼저 보는 손님 비율, 0 ~ 1. 장애 비율과는 독립 |
 
-네 비율의 합은 1 이하여야 한다. 순번 구간은 payment-error → payment-slow → pg-error → pg-slow → 정상 순서다.
+장애 비율 일곱 개의 합은 1 이하여야 한다. 순번 구간은 payment-error → payment-slow → pg-error → pg-slow → inventory-error → inventory-slow → soldout → 정상 순서다.
 
 ## 읽는 법
 

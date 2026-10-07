@@ -9,7 +9,7 @@ data class CreateOrderRequest(
     val amount: Int,
 )
 
-/** POST /api/orders 응답 (201 · 502 둘 다 이 모양) */
+/** POST /api/orders 응답 (201 · 409 · 502 모두 이 모양) */
 data class CreateOrderResponse(
     val orderId: Long,
     val status: OrderStatus,

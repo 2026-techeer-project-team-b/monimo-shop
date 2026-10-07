@@ -6,4 +6,5 @@ AI 에게 무엇을 어떻게 물었고 무엇이 나왔는지 남긴다. 규칙
 
 | 날짜 | 작업 | 한 번에 | 고쳐 물음 |
 |---|---|---|---|
+| 2026-10-07 | 재고 서비스 + Redis 캐시 (`#32`) : 조사 · 결정 · 구현 원문은 [`../seungjo/32-inventory-redis/prompts.md`](../seungjo/32-inventory-redis/prompts.md) | 아니오 (구현 중 1회 : Redis 가 죽었을 때 차감이 500) | 1 |
 | 2026-10-06 | 재시작해도 그대로인 에이전트 이름표 (`#30`) : 조사 · 결정 · 구현 원문은 [`../seungjo/30-service-instance-id/prompts.md`](../seungjo/30-service-instance-id/prompts.md) | 예 | 0 |

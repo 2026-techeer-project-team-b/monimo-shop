@@ -20,13 +20,14 @@ import java.io.IOException
  * 스프링 없이 가짜 주문 서비스(MockRestServiceServer)를 세워, 게이트웨이가 요청을 그대로 넘기고
  * 응답을 바꾸지 않는지 본다. 실제 넘기기는 compose · CI smoke 로 확인한다.
  */
-class OrderProxyTest : BehaviorSpec({
+class UpstreamProxyTest : BehaviorSpec({
     val order = "http://order:8091"
+    val inventory = "http://inventory:8093"
     val json = """{"productId":"P-100","quantity":1,"amount":1000}"""
 
-    fun proxyWithFakeOrder(): Pair<OrderProxy, MockRestServiceServer> {
+    fun proxyWithFakeOrder(): Pair<UpstreamProxy, MockRestServiceServer> {
         val restTemplate = RestTemplate().apply { errorHandler = PassThroughErrorHandler() } // 실제 빈과 같은 처리기
-        return OrderProxy(restTemplate, order) to MockRestServiceServer.bindTo(restTemplate).build()
+        return UpstreamProxy(restTemplate) to MockRestServiceServer.bindTo(restTemplate).build()
     }
 
     fun postOrder(fault: String? = null) = MockHttpServletRequest("POST", "/api/orders").apply {
@@ -45,7 +46,7 @@ class OrderProxyTest : BehaviorSpec({
                     .andExpect(content().json(json))
                     .andRespond(withStatus(HttpStatus.CREATED).contentType(MediaType.APPLICATION_JSON).body("""{"orderId":1,"status":"PAID"}"""))
 
-                val res = proxy.forward(postOrder("payment-slow"), json.toByteArray())
+                val res = proxy.forward(order, postOrder("payment-slow"), json.toByteArray())
 
                 res.statusCode shouldBe HttpStatus.CREATED
                 String(res.body!!) shouldBe """{"orderId":1,"status":"PAID"}"""
@@ -58,21 +59,21 @@ class OrderProxyTest : BehaviorSpec({
                 server.expect(requestTo("$order/api/orders"))
                     .andRespond(withStatus(HttpStatus.BAD_GATEWAY).contentType(MediaType.APPLICATION_JSON).body("""{"status":"FAILED"}"""))
 
-                val res = proxy.forward(postOrder("pg-error"), json.toByteArray())
+                val res = proxy.forward(order, postOrder("pg-error"), json.toByteArray())
 
                 res.statusCode shouldBe HttpStatus.BAD_GATEWAY
                 String(res.body!!) shouldBe """{"status":"FAILED"}"""
             }
         }
         When("주문에 연결이 안 되면") {
-            Then("502 order unavailable") {
+            Then("502 upstream unavailable") {
                 val (proxy, server) = proxyWithFakeOrder()
                 server.expect(requestTo("$order/api/orders")).andRespond(withException(IOException("connection refused")))
 
-                val res = proxy.forward(postOrder(), json.toByteArray())
+                val res = proxy.forward(order, postOrder(), json.toByteArray())
 
                 res.statusCode shouldBe HttpStatus.BAD_GATEWAY
-                String(res.body!!) shouldBe """{"reason":"order unavailable"}"""
+                String(res.body!!) shouldBe """{"reason":"upstream unavailable"}"""
             }
         }
     }
@@ -85,9 +86,26 @@ class OrderProxyTest : BehaviorSpec({
                     .andExpect(method(HttpMethod.GET))
                     .andRespond(withStatus(HttpStatus.NOT_FOUND).contentType(MediaType.APPLICATION_JSON).body("""{"reason":"order not found"}"""))
 
-                val res = proxy.forward(MockHttpServletRequest("GET", "/api/orders/1").apply { queryString = "debug=1" }, null)
+                val res = proxy.forward(order, MockHttpServletRequest("GET", "/api/orders/1").apply { queryString = "debug=1" }, null)
 
                 res.statusCode shouldBe HttpStatus.NOT_FOUND
+                server.verify()
+            }
+        }
+    }
+
+    Given("GET /api/stock/{id}") {
+        When("재고 서비스 주소로 넘기면") {
+            Then("같은 프록시가 경로를 붙여 재고 서비스를 부르고 200 과 본문이 그대로 온다") {
+                val (proxy, server) = proxyWithFakeOrder()
+                server.expect(requestTo("$inventory/api/stock/P-100"))
+                    .andExpect(method(HttpMethod.GET))
+                    .andRespond(withStatus(HttpStatus.OK).contentType(MediaType.APPLICATION_JSON).body("""{"productId":"P-100","qty":7}"""))
+
+                val res = proxy.forward(inventory, MockHttpServletRequest("GET", "/api/stock/P-100"), null)
+
+                res.statusCode shouldBe HttpStatus.OK
+                String(res.body!!) shouldBe """{"productId":"P-100","qty":7}"""
                 server.verify()
             }
         }

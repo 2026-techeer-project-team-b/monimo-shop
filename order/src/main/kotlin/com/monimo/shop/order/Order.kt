@@ -13,4 +13,5 @@ data class Order(
     val createdAt: LocalDateTime,
 )
 
-enum class OrderStatus { PENDING, PAID, FAILED }
+/** SOLD_OUT 은 재고가 모자라 결제를 부르지 않고 끝난 주문 (409) */
+enum class OrderStatus { PENDING, PAID, FAILED, SOLD_OUT }
