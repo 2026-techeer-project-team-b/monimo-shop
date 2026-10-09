@@ -17,6 +17,7 @@
 | `otel/` | OTel Java Agent 설정 · 버전 고정 — `agent.properties`(전송 gRPC · 수집기 `collector:4317` · 샘플러 always_on) · `AGENT_VERSION` |
 | `k6/` | 부하 · 에러 주입 시나리오 |
 | `pg-stub/` | 더미 외부 결제사 (WireMock 응답 정의, 에이전트 없음) |
+| `perf/overhead/` | 에이전트 오버헤드 측정 (붙임 · 뗌을 같은 부하로 비교). [`perf/overhead/README.md`](perf/overhead/README.md) |
 
 ## 로컬 실행
 
@@ -115,6 +116,15 @@ compose 로 결제 · 주문을 켜 둔 상태에서 `bootRun` 을 하면 포트
 docker run --rm --network monimo-dev -v "$PWD/k6:/scripts" -e BASE_URL=http://gateway:8090 \
   -e RATE=5 -e DURATION=20s -e ERROR_RATE=0.3 -e SLOW_RATE=0.1 -e SOLDOUT_RATE=0.1 \
   grafana/k6:2.3.0 run /scripts/order.js
+```
+
+## 에이전트 오버헤드 측정
+
+에이전트를 붙인 쪽과 뗀 쪽을 같은 부하(k6 고정 요청률)로 돌려 CPU · 메모리 차이를 잰다. 쇼핑몰을 내려 둔 채 레포 루트에서 실행한다(스크립트가 직접 띄우고 내린다). 방법은 [`perf/overhead/README.md`](perf/overhead/README.md), 결과는 [`docs/seungjo/36-agent-overhead/results.md`](docs/seungjo/36-agent-overhead/results.md).
+
+```bash
+perf/overhead/run.sh on 20 && perf/overhead/run.sh off 20   # 한 쌍 (각 약 3분 30초)
+python3 perf/overhead/summarize.py                           # 서비스별 중앙값 표
 ```
 
 ## 환경변수
