@@ -1,0 +1,7 @@
+# 측정용 덮어쓰기 : 에이전트를 붙이는 네 서비스에 같은 제한을 건다 (#36 결정 : CPU 1개 · 메모리 1GB).
+# 제한이 없으면 JVM 이 최대 힙을 도커 메모리의 25%(약 4GB)로 잡아 GC 타이밍에 붙임 · 뗌 차이가 묻힌다.
+services:
+  gateway:   {cpus: 1.0, mem_limit: 1g}
+  order:     {cpus: 1.0, mem_limit: 1g}
+  payment:   {cpus: 1.0, mem_limit: 1g}
+  inventory: {cpus: 1.0, mem_limit: 1g}
