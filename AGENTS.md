@@ -72,7 +72,7 @@ CI 는 **build**(Gradle 컴파일 + 테스트) → **smoke**(compose 로 띄운 
 - 얇은 게이트웨이. 진입 주소를 8090 으로 (`#25`)
 - 에이전트 이름표 `service.instance.id` 를 환경변수로 고정. compose 는 `shop-<서비스>-local-1`, 쿠버네티스는 Downward API 로 파드 이름 (`#30`). 재시작해도 `agent_id` 가 그대로다
 - 스레드 덤프 Extension 첫 검증 (`#34`, backend `#122`). Java Extension 이 수집기에 롱폴링으로 명령을 받아 jstack 모양 덤프를 회신. 네 서비스 모두 덤프 200, Extension 호출 스팬 0건, 수집기 재시작 4~5초 뒤 재연결, 별도 리뷰 MEDIUM 4건 반영
-- 에이전트 오버헤드 측정 (`#36`). 같은 이미지 · 고정 부하로 붙임 · 뗌 5회씩 번갈아(CPU 1개 · 1GB 제한). CPU 상대 +10 ~ +39%(1코어 대비 +0.6 ~ +3.6%p, 주문 1건당 +2.9 ~ +4.3ms), 메모리 +80 ~ +141MB 로 요구사항(3% · 100MB) 못 지킴. 메모리 절반은 힙 아닌 쪽(에이전트 클래스 약 5,000개 · JIT 코드, 고정), 샘플링 10% 는 효과 없고 메트릭 끄기가 에이전트 추가 CPU 의 약 5분의 1 로 보임(3회, 확정 아님). 스크립트 `perf/overhead/`, 결과 `docs/seungjo/36-agent-overhead/results.md`
+- 에이전트 오버헤드 측정 (`#36`). 같은 이미지 · 고정 부하로 붙임 · 뗌 5회씩 번갈아(CPU 1개 · 1GB 제한). CPU 상대 +10 ~ +39%(1코어 대비 +0.6 ~ +3.6%p, 주문 1건당 +2.9 ~ +4.3ms), 메모리 +80 ~ +141MB 로 요구사항(3% · 100MB) 못 지킴. 메모리 절반은 힙 아닌 쪽(에이전트 클래스 약 5,000개 · JIT 코드, 고정), 샘플링 10% 는 효과 없고 메트릭 끄기가 에이전트 추가 CPU 의 약 5분의 1 로 보임(3회, 확정 아님). 스크립트 `perf/overhead/`, 결과 `docs/seungjo/36-agent-overhead/results.md` 요구사항은 팀 결정으로 실측에 맞게 고침(backend `#132` · ADR `#56`, `#38`)
 - 재고 서비스 + Redis 캐시 (`#32`). 주문이 결제 전에 재고를 조건부 UPDATE 로 차감하고 모자라면 409, 결제 실패면 복원(주문 번호로 한 번만). 조회만 cache-aside, Redis 헬스체크는 끔(고아 스팬), timeout 500ms + DB 폴백. k6 에 재고 조회 손님 · inventory-slow · inventory-error · 품절 추가
 - `AGENTS.md` · `CLAUDE.md`, README 「AI 와 일한 방법」 절, `docs/prompts/`(프롬프트 로그 : 코드와 같은 PR 에). 하네스 정본은 backend `docs/seungjo/harness.md` 한 곳
 
@@ -82,7 +82,7 @@ CI 는 **build**(Gradle 컴파일 + 테스트) → **smoke**(compose 로 띄운 
 |---|---|
 | 에이전트 3.0 이 오면 서버맵의 DB 분류가 깨진다 | 새 버전은 `db.system` 대신 `db.system.name` 을 붙이는데 backend `mv_server_map_1m` 은 `db.system` 만 본다. 에이전트를 올리기 전에 backend 가 두 키를 다 보게 해야 한다 (`#32` research 2.2) |
 | 스레드 덤프 API 서버 팬아웃 · 화면 · CH 저장이 없다 | 수집기 `POST /internal/thread-dump` 까지만 있다. API 서버 팬아웃(`agentUuid` → service · instance, 503 재시도)은 재범, CH `thread_dumps` 저장(Q16)은 조회 쪽. 그 전까지는 curl 로만 뜬다 |
-| 에이전트 오버헤드가 요구사항(CPU 3% · 메모리 100MB)을 못 지킨다 | 실측 CPU 상대 +10 ~ +39%, 메모리 +80 ~ +141MB (`#36`). 요구사항 문장을 고칠지(제안 : 주문당 CPU · 1코어 대비 %p · 150MB) 설정을 줄일지(메트릭 끄기 · 계측 줄이기) 팀이 정해야 한다. 설정을 줄여도 3% · inventory 100MB 는 못 맞춘다 |
+| 에이전트 오버헤드 기준이 빠듯하다 | 요구사항을 실측에 맞게 고쳤다(backend ADR `#56` : 파드당 CPU 1개 · 초당 주문 20건에서 1코어 대비 +3%p, 메모리 150MB). 지금 값은 통과(+1.4 ~ +2.1%p, 최대 141MB)지만 초당 40건이면 order · inventory 가 +3.5 · +3.6%p 로 넘고 메모리 여유는 9MB 다. 실제 파드 부하가 정해지거나 에이전트 버전을 올리면 `perf/overhead/` 로 다시 잰다 (`#36`) |
 | Redis 연결을 맺을 때 부모 없는 스팬 3개(`HELLO` · `CLIENT SETINFO`)가 남는다 | 앱 시작 · 재연결 때만 생겨 양이 작다. 헬스체크 `INFO` 는 `#32` 에서 껐다 |
 
 ## 7. 참고
