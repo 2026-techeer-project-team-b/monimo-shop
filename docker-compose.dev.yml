@@ -70,9 +70,8 @@ services:
     ports:
       - "${PAYMENT_PORT:-8092}:8092"
     environment:
-      # 기본은 agent.properties 의 collector:4317. .env 로 덮어쓸 때만 바뀐다
+      # 수집기 주소는 agent.properties 의 http://collector:4317 이다. 여기 OTEL_EXPORTER_OTLP_ENDPOINT 를 두지 않는다 (아래 env_file 설명)
       # PG_BASE_URL=http://pg-stub:8080 은 이미지 기본값이라 적지 않는다 (서비스 이름과 같다)
-      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://collector:4317}
       # 에이전트 이름표(service.instance.id). 안 주면 에이전트가 뜰 때마다 랜덤 UUID 를 만들어 재시작할 때마다 새 에이전트처럼 보인다(#30).
       # 백엔드는 이 값을 agent_id 로 쓴다. K8s 에서는 Downward API 로 파드 이름을 넣고(README), compose 엔 파드가 없어 이름을 직접 적는다.
       # agent.properties 의 같은 키를 통째로 덮으므로 deployment.environment.name=local 도 같이 적는다
@@ -81,6 +80,16 @@ services:
       # 수집기의 MONIMO_AGENT_TOKEN 과 같아야 한다. 로컬 전용 값이다. :- 라서 .env 에 빈 값을 넣어도 기본값이 되살아난다
       # (Extension 은 토큰이 비면 꺼지지만, 끄려면 이 줄을 직접 비워야 한다)
       OTEL_MONIMO_AGENT_TOKEN: ${MONIMO_AGENT_TOKEN:-local-agent-token}
+    # 에이전트 mTLS (backend #159 · ADR #64). .env 의 MONIMO_OTLP_CERTS_DIR 이 비어 있으면(기본) 없는 파일을 가리켜 아무것도 안 읽고
+    # 지금처럼 평문(agent.properties 의 http://collector:4317)이다. 채우면 그 폴더(backend compose 가 monimo-backend/certs 에 만든다)의
+    # env/shop-payment.env 를 읽어 https 주소와 파일 셋(기관 인증서 · 이 서비스의 신분증 · 열쇠)을 받고, 폴더를 /certs 로 읽는다.
+    # environment 가 아니라 env_file 인 이유 : 환경변수를 빈 값으로 넣으면 에이전트가 "Invalid OTLP certificate/key path" 로 멈춘다(실측).
+    # 그래서 OTEL_EXPORTER_OTLP_ENDPOINT 도 environment 에 두지 않는다 (null 항목이 env_file 값을 덮는다, 실측)
+    env_file:
+      - path: ${MONIMO_OTLP_CERTS_DIR:-./otel/mtls-off}/env/shop-payment.env
+        required: false
+    volumes:
+      - ${MONIMO_OTLP_CERTS_DIR:-./otel}:/certs:ro
     depends_on:
       pg-stub:
         condition: service_healthy
@@ -105,11 +114,20 @@ services:
       MYSQL_DATABASE: ${MYSQL_DATABASE:-shop}
       MYSQL_USER: ${MYSQL_USER:-shop}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:-shop}
-      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://collector:4317}
       # 에이전트 이름표. 재시작해도 그대로 (payment 설명 참고, #30)
       OTEL_RESOURCE_ATTRIBUTES: "service.instance.id=shop-inventory-local-1,deployment.environment.name=local"
       OTEL_MONIMO_AGENT_TOKEN: ${MONIMO_AGENT_TOKEN:-local-agent-token}   # 스레드 덤프 Extension (payment 설명 참고)
       # Redis 는 peer 매핑에 넣지 않는다. 넣으면 서버맵이 Redis 를 DB 가 아니라 우리 서비스로 잘못 그린다 (#32)
+    # 에이전트 mTLS (backend #159 · ADR #64). .env 의 MONIMO_OTLP_CERTS_DIR 이 비어 있으면(기본) 없는 파일을 가리켜 아무것도 안 읽고
+    # 지금처럼 평문(agent.properties 의 http://collector:4317)이다. 채우면 그 폴더(backend compose 가 monimo-backend/certs 에 만든다)의
+    # env/shop-inventory.env 를 읽어 https 주소와 파일 셋(기관 인증서 · 이 서비스의 신분증 · 열쇠)을 받고, 폴더를 /certs 로 읽는다.
+    # environment 가 아니라 env_file 인 이유 : 환경변수를 빈 값으로 넣으면 에이전트가 "Invalid OTLP certificate/key path" 로 멈춘다(실측).
+    # 그래서 OTEL_EXPORTER_OTLP_ENDPOINT 도 environment 에 두지 않는다 (null 항목이 env_file 값을 덮는다, 실측)
+    env_file:
+      - path: ${MONIMO_OTLP_CERTS_DIR:-./otel/mtls-off}/env/shop-inventory.env
+        required: false
+    volumes:
+      - ${MONIMO_OTLP_CERTS_DIR:-./otel}:/certs:ro
     depends_on:
       mysql:
         condition: service_healthy
@@ -135,7 +153,6 @@ services:
       MYSQL_DATABASE: ${MYSQL_DATABASE:-shop}
       MYSQL_USER: ${MYSQL_USER:-shop}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:-shop}
-      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://collector:4317}
       # 에이전트 이름표. 재시작해도 그대로 (payment 설명 참고, #30)
       OTEL_RESOURCE_ATTRIBUTES: "service.instance.id=shop-order-local-1,deployment.environment.name=local"
       OTEL_MONIMO_AGENT_TOKEN: ${MONIMO_AGENT_TOKEN:-local-agent-token}   # 스레드 덤프 Extension (payment 설명 참고)
@@ -143,6 +160,16 @@ services:
       # 비어 있으면 서버맵 집계가 주소(payment:8092)를 외부 시스템으로 분류한다(Q20). 호스트 이름이 환경마다 달라 agent.properties 가 아니라 여기 둔다.
       # pg-stub 은 외부 결제사라 일부러 넣지 않는다. Redis · MySQL 도 넣지 않는다 (DB 는 db.system 으로 가려진다)
       OTEL_INSTRUMENTATION_COMMON_PEER_SERVICE_MAPPING: "payment=shop-payment,inventory=shop-inventory"
+    # 에이전트 mTLS (backend #159 · ADR #64). .env 의 MONIMO_OTLP_CERTS_DIR 이 비어 있으면(기본) 없는 파일을 가리켜 아무것도 안 읽고
+    # 지금처럼 평문(agent.properties 의 http://collector:4317)이다. 채우면 그 폴더(backend compose 가 monimo-backend/certs 에 만든다)의
+    # env/shop-order.env 를 읽어 https 주소와 파일 셋(기관 인증서 · 이 서비스의 신분증 · 열쇠)을 받고, 폴더를 /certs 로 읽는다.
+    # environment 가 아니라 env_file 인 이유 : 환경변수를 빈 값으로 넣으면 에이전트가 "Invalid OTLP certificate/key path" 로 멈춘다(실측).
+    # 그래서 OTEL_EXPORTER_OTLP_ENDPOINT 도 environment 에 두지 않는다 (null 항목이 env_file 값을 덮는다, 실측)
+    env_file:
+      - path: ${MONIMO_OTLP_CERTS_DIR:-./otel/mtls-off}/env/shop-order.env
+        required: false
+    volumes:
+      - ${MONIMO_OTLP_CERTS_DIR:-./otel}:/certs:ro
     depends_on:
       # 주문은 뜰 때 schema.sql 을 실행하고, 실패하면 기동을 멈춘다(continue-on-error=false). 그래서 MySQL 이 준비된 뒤에 띄운다
       mysql:
@@ -168,12 +195,21 @@ services:
       - "${GATEWAY_PORT:-8090}:8090"
     environment:
       # ORDER_BASE_URL=http://order:8091 · INVENTORY_BASE_URL=http://inventory:8093 은 이미지 기본값이라 적지 않는다
-      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://collector:4317}
       # 에이전트 이름표. 재시작해도 그대로 (payment 설명 참고, #30)
       OTEL_RESOURCE_ATTRIBUTES: "service.instance.id=shop-gateway-local-1,deployment.environment.name=local"
       OTEL_MONIMO_AGENT_TOKEN: ${MONIMO_AGENT_TOKEN:-local-agent-token}   # 스레드 덤프 Extension (payment 설명 참고)
       # gateway → order · inventory 를 서버맵에서 우리 서비스로 잇는다 (없으면 order:8091 이 외부로 잡힌다)
       OTEL_INSTRUMENTATION_COMMON_PEER_SERVICE_MAPPING: "order=shop-order,inventory=shop-inventory"
+    # 에이전트 mTLS (backend #159 · ADR #64). .env 의 MONIMO_OTLP_CERTS_DIR 이 비어 있으면(기본) 없는 파일을 가리켜 아무것도 안 읽고
+    # 지금처럼 평문(agent.properties 의 http://collector:4317)이다. 채우면 그 폴더(backend compose 가 monimo-backend/certs 에 만든다)의
+    # env/shop-gateway.env 를 읽어 https 주소와 파일 셋(기관 인증서 · 이 서비스의 신분증 · 열쇠)을 받고, 폴더를 /certs 로 읽는다.
+    # environment 가 아니라 env_file 인 이유 : 환경변수를 빈 값으로 넣으면 에이전트가 "Invalid OTLP certificate/key path" 로 멈춘다(실측).
+    # 그래서 OTEL_EXPORTER_OTLP_ENDPOINT 도 environment 에 두지 않는다 (null 항목이 env_file 값을 덮는다, 실측)
+    env_file:
+      - path: ${MONIMO_OTLP_CERTS_DIR:-./otel/mtls-off}/env/shop-gateway.env
+        required: false
+    volumes:
+      - ${MONIMO_OTLP_CERTS_DIR:-./otel}:/certs:ro
     depends_on:
       order:
         condition: service_healthy

@@ -74,6 +74,7 @@ CI 는 **build**(Gradle 컴파일 + 테스트) → **smoke**(compose 로 띄운 
 - 스레드 덤프 Extension 첫 검증 (`#34`, backend `#122`). Java Extension 이 수집기에 롱폴링으로 명령을 받아 jstack 모양 덤프를 회신. 네 서비스 모두 덤프 200, Extension 호출 스팬 0건, 수집기 재시작 4~5초 뒤 재연결, 별도 리뷰 MEDIUM 4건 반영
 - 에이전트 오버헤드 측정 (`#36`). 같은 이미지 · 고정 부하로 붙임 · 뗌 5회씩 번갈아(CPU 1개 · 1GB 제한). CPU 상대 +10 ~ +39%(1코어 대비 +0.6 ~ +3.6%p, 주문 1건당 +2.9 ~ +4.3ms), 메모리 +80 ~ +141MB 로 요구사항(3% · 100MB) 못 지킴. 메모리 절반은 힙 아닌 쪽(에이전트 클래스 약 5,000개 · JIT 코드, 고정), 샘플링 10% 는 효과 없고 메트릭 끄기가 에이전트 추가 CPU 의 약 5분의 1 로 보임(3회, 확정 아님). 스크립트 `perf/overhead/`, 결과 `docs/seungjo/36-agent-overhead/results.md` 요구사항은 팀 결정으로 실측에 맞게 고침(backend `#132` · ADR `#56`, `#38`)
 - 재고 서비스 + Redis 캐시 (`#32`). 주문이 결제 전에 재고를 조건부 UPDATE 로 차감하고 모자라면 409, 결제 실패면 복원(주문 번호로 한 번만). 조회만 cache-aside, Redis 헬스체크는 끔(고아 스팬), timeout 500ms + DB 폴백. k6 에 재고 조회 손님 · inventory-slow · inventory-error · 품절 추가
+- 에이전트 mTLS (`#40`, backend `#159` · ADR `#64`). 수집기가 손님 신분증을 요구할 때 네 서비스가 자기 이름의 신분증을 내도록 compose 에 OTel 인증서 환경변수 셋과 `/certs` 마운트. `.env` 의 `MONIMO_OTLP_CERTS_DIR` 이 비어 있으면(기본) 평문 그대로. 자바 코드 0줄
 - `AGENTS.md` · `CLAUDE.md`, README 「AI 와 일한 방법」 절, `docs/prompts/`(프롬프트 로그 : 코드와 같은 PR 에). 하네스 정본은 backend `docs/seungjo/harness.md` 한 곳
 
 ## 6. 지금 막혀 있는 것

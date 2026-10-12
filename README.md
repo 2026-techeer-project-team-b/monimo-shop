@@ -65,6 +65,8 @@ env:
 
 데이터를 수집기까지 보내려면 monimo-backend 에서 `docker compose --profile collector up -d --wait` 로 수집기를 같이 켠다. 수집기가 꺼져 있어도 쇼핑몰은 정상으로 뜬다(에이전트는 전송 실패를 로그로만 남긴다).
 
+수집기가 에이전트 신분증을 요구하면(backend `.env` 의 `COLLECTOR_TLS_CLIENT_AUTH=optional|require`, backend `#159` · ADR `#64`) 쇼핑몰 `.env` 에 `MONIMO_OTLP_CERTS_DIR=../monimo-backend/certs` 한 줄을 열고 다시 띄운다. 인증서는 backend compose 가 켤 때 만들고, 네 서비스는 그 폴더의 `env/shop-<서비스>.env` 로 `https` 주소와 각자 이름의 신분증(`clients/shop-<서비스>.crt` · `.key`)을 받는다. 수집기는 도장만 보고 이름은 검사하지 않는다. 자바 코드는 0줄이다. 잘 붙었는지는 수집기 관리 포트의 `/actuator/metrics/monimo.collector.otlp.connections?tag=auth:mtls` 가 4 인지로 본다. 신호가 갑자기 끊기면 **신분증 기간(5년)이 지났는지**를 먼저 본다 : 갱신은 backend `certs/` 를 지우고 다시 만든 뒤 수집기와 쇼핑몰을 재시작하는 것이다.
+
 ### 코드만 빠르게 — Gradle (에이전트 없음)
 
 ```bash
@@ -145,7 +147,7 @@ python3 perf/overhead/summarize.py                           # 서비스별 중�
 | `ORDER_BASE_URL` | http://localhost:8091 | 게이트웨이가 넘길 주문 서비스 주소. `bootRun` 기준 기본값이고, compose 에서는 이미지 기본값 `http://order:8091` 을 쓴다 |
 | `INVENTORY_BASE_URL` | http://localhost:8093 | 게이트웨이 · 주문 서비스가 부를 재고 서비스 주소. `bootRun` 기준 기본값이고, compose 에서는 이미지 기본값 `http://inventory:8093` 을 쓴다 |
 | `PAYMENT_BASE_URL` | http://localhost:8092 | 주문 서비스가 부를 결제 서비스 주소. `bootRun` 기준 기본값이고, compose 에서는 이미지 기본값 `http://payment:8092` 를 쓴다 |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | http://collector:4317 | OTel Java Agent 가 보낼 수집기 gRPC 주소 (`otel/agent.properties` 와 같음, 공용 네트워크 `monimo-dev`). 다른 수집기로 보낼 때만 바꾼다 |
+| `MONIMO_OTLP_CERTS_DIR` | (비움 = 평문) | 에이전트 mTLS 인증서 폴더 (backend `#159` · ADR `#64`). backend compose 가 `monimo-backend/certs` 에 만든다. 채우면 네 서비스가 그 안의 `env/shop-<서비스>.env` 를 읽어 `https://collector:4317` 과 파일 셋(`OTEL_EXPORTER_OTLP_CERTIFICATE` 기관 인증서 · `..._CLIENT_CERTIFICATE` · `..._CLIENT_KEY` 자기 이름의 신분증 · 열쇠)을 받고, 폴더를 `/certs` 로 읽는다. 비우면 `otel/agent.properties` 의 평문 `http://collector:4317` 그대로. 수집기 주소만 따로 바꾸던 `OTEL_EXPORTER_OTLP_ENDPOINT` 는 `#40` 에서 뺐다(빈 값이 env_file 값을 덮는다) |
 | `OTEL_SERVICE_NAME` | (컨테이너별) | `shop-gateway` · `shop-order` · `shop-payment` · `shop-inventory` |
 | `MONIMO_AGENT_TOKEN` | local-agent-token | 스레드 덤프 Extension 이 수집기에 붙이는 토큰 (compose 가 `OTEL_MONIMO_AGENT_TOKEN` 으로 넘김). 수집기 값과 같아야 한다 |
 | `OTEL_RESOURCE_ATTRIBUTES` | (컨테이너별) | 에이전트 이름표와 환경. compose 는 `service.instance.id=shop-<서비스>-local-1,deployment.environment.name=local`, 쿠버네티스는 Downward API 로 파드 이름 (위 「한 번에 켜기」) |
