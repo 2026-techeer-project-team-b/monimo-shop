@@ -1,0 +1,9 @@
+# 원인 분석용 : JVM 이 메모리를 항목별(힙 · 클래스 · 코드 · 스레드 …)로 장부에 적게 하고, 끝날 때 로그로 찍게 한다.
+# 이미지가 JRE 라 jcmd 가 없어서 종료 시 출력(PrintNMTStatistics)을 쓴다. NMT 는 그 자체로 느려지므로 CPU 를 재는 회차와 섞지 않는다
+x-env: &env
+  JAVA_TOOL_OPTIONS: "-XX:NativeMemoryTracking=summary -XX:+UnlockDiagnosticVMOptions -XX:+PrintNMTStatistics"
+services:
+  gateway:   {environment: *env}
+  order:     {environment: *env}
+  payment:   {environment: *env}
+  inventory: {environment: *env}

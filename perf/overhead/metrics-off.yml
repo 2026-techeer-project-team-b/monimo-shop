@@ -1,0 +1,9 @@
+# 원인 찾기 실험 : 에이전트는 붙이고 메트릭만 끈다. HTTP · DB 지연 히스토그램은 샘플링과 상관없이 모든 요청에 기록되므로
+# 이게 CPU 를 먹는지 본다. 운영 설정이 아니다 (끄면 화면의 메트릭이 비는 실험용)
+x-env: &env
+  OTEL_METRICS_EXPORTER: none
+services:
+  gateway:   {environment: *env}
+  order:     {environment: *env}
+  payment:   {environment: *env}
+  inventory: {environment: *env}

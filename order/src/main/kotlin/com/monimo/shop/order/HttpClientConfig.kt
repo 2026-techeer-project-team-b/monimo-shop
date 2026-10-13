@@ -17,6 +17,6 @@ class HttpClientConfig {
     fun restTemplate(builder: RestTemplateBuilder): RestTemplate =
         builder
             .connectTimeout(Duration.ofSeconds(2))
-            .readTimeout(Duration.ofSeconds(5))   // payment-slow(2초) 보다 길게
+            .readTimeout(Duration.ofSeconds(5))   // payment-slow(2초) · inventory-slow(1.5초) 보다 길게. 재고 · 결제 호출이 같이 쓴다
             .build()
 }

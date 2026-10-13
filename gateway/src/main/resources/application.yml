@@ -6,6 +6,10 @@ spring:
   application:
     name: shop-gateway
 
-# 주문 서비스 주소. 컨테이너끼리는 http://order:8091 (gateway/Dockerfile 기본값)
+# 주문 서비스 주소. 컨테이너끼리는 http://order:8091 (루트 Dockerfile 의 gateway 단계 기본값)
 order:
   base-url: ${ORDER_BASE_URL:http://localhost:8091}
+
+# 재고 서비스 주소. 컨테이너끼리는 http://inventory:8093 (루트 Dockerfile 의 gateway 단계 기본값). 재고 조회(GET /api/stock/{id})만 넘긴다
+inventory:
+  base-url: ${INVENTORY_BASE_URL:http://localhost:8093}
