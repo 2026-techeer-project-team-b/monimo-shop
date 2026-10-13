@@ -65,7 +65,8 @@ services:
   payment:
     build:
       context: .
-      dockerfile: payment/Dockerfile
+      dockerfile: Dockerfile
+      target: payment   # 루트 Dockerfile 하나에서 이 서비스 단계만 (#42)
     image: monimo/shop-payment:dev
     ports:
       - "${PAYMENT_PORT:-8092}:8092"
@@ -104,7 +105,8 @@ services:
   inventory:
     build:
       context: .
-      dockerfile: inventory/Dockerfile
+      dockerfile: Dockerfile
+      target: inventory
     image: monimo/shop-inventory:dev
     ports:
       - "${INVENTORY_PORT:-8093}:8093"
@@ -143,7 +145,8 @@ services:
   order:
     build:
       context: .
-      dockerfile: order/Dockerfile
+      dockerfile: Dockerfile
+      target: order
     image: monimo/shop-order:dev
     ports:
       - "${ORDER_PORT:-8091}:8091"
@@ -189,7 +192,8 @@ services:
   gateway:
     build:
       context: .
-      dockerfile: gateway/Dockerfile
+      dockerfile: Dockerfile
+      target: gateway
     image: monimo/shop-gateway:dev
     ports:
       - "${GATEWAY_PORT:-8090}:8090"

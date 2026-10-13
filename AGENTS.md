@@ -31,6 +31,7 @@ Kotlin 2.2 · Java 17 · Spring Boot 3.5 · Gradle 멀티모듈. 버전은 `grad
 | `k6/` | 부하 · 에러 주입 시나리오 | — |
 | `pg-stub/` | 더미 외부 결제사 (WireMock, 에이전트 없음) | 8099 |
 | `perf/overhead/` | 에이전트 오버헤드 측정 스크립트 (붙임 · 뗌을 같은 부하로 비교) | — |
+| `Dockerfile` (루트) | 네 서비스 이미지를 한 파일로. Gradle 한 번 + 서비스별 `--target`. 서비스를 더하면 build 의 gradlew 줄과 맨 아래 target 단계를 같이 늘린다 | — |
 
 주문 한 건이 만드는 호출: `gateway → order` · `order → MySQL` · `order → payment` · `payment → pg-stub`.
 
@@ -72,6 +73,7 @@ CI 는 **build**(Gradle 컴파일 + 테스트) → **smoke**(compose 로 띄운 
 - 얇은 게이트웨이. 진입 주소를 8090 으로 (`#25`)
 - 에이전트 이름표 `service.instance.id` 를 환경변수로 고정. compose 는 `shop-<서비스>-local-1`, 쿠버네티스는 Downward API 로 파드 이름 (`#30`). 재시작해도 `agent_id` 가 그대로다
 - 스레드 덤프 Extension 첫 검증 (`#34`, backend `#122`). Java Extension 이 수집기에 롱폴링으로 명령을 받아 jstack 모양 덤프를 회신. 네 서비스 모두 덤프 200, Extension 호출 스팬 0건, 수집기 재시작 4~5초 뒤 재연결, 별도 리뷰 MEDIUM 4건 반영
+- 이미지 빌드를 가볍게 (`#42`). 서비스마다 있던 Dockerfile 4개를 루트 `Dockerfile` 하나(멀티스테이지 · 서비스별 target)로, Gradle 캐시 마운트, `.dockerignore` 에 `docs` · `perf` · `*.md`. 캐시 없이 97 → 40초(도커 CPU 최고 918 → 662%), 코드 한 줄 뒤 약 94 → 8초, 문서만 바뀌면 94 → 1초
 - 에이전트 오버헤드 측정 (`#36`). 같은 이미지 · 고정 부하로 붙임 · 뗌 5회씩 번갈아(CPU 1개 · 1GB 제한). CPU 상대 +10 ~ +39%(1코어 대비 +0.6 ~ +3.6%p, 주문 1건당 +2.9 ~ +4.3ms), 메모리 +80 ~ +141MB 로 요구사항(3% · 100MB) 못 지킴. 메모리 절반은 힙 아닌 쪽(에이전트 클래스 약 5,000개 · JIT 코드, 고정), 샘플링 10% 는 효과 없고 메트릭 끄기가 에이전트 추가 CPU 의 약 5분의 1 로 보임(3회, 확정 아님). 스크립트 `perf/overhead/`, 결과 `docs/seungjo/36-agent-overhead/results.md` 요구사항은 팀 결정으로 실측에 맞게 고침(backend `#132` · ADR `#56`, `#38`)
 - 재고 서비스 + Redis 캐시 (`#32`). 주문이 결제 전에 재고를 조건부 UPDATE 로 차감하고 모자라면 409, 결제 실패면 복원(주문 번호로 한 번만). 조회만 cache-aside, Redis 헬스체크는 끔(고아 스팬), timeout 500ms + DB 폴백. k6 에 재고 조회 손님 · inventory-slow · inventory-error · 품절 추가
 - 에이전트 mTLS (`#40`, backend `#159` · ADR `#64`). 수집기가 손님 신분증을 요구할 때 네 서비스가 자기 이름의 신분증을 내도록 compose 에 OTel 인증서 환경변수 셋과 `/certs` 마운트. `.env` 의 `MONIMO_OTLP_CERTS_DIR` 이 비어 있으면(기본) 평문 그대로. 자바 코드 0줄
