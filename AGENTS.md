@@ -83,10 +83,10 @@ CI 는 **build**(Gradle 컴파일 + 테스트) → **smoke**(compose 로 띄운 
 
 | 무엇 | 안 풀면 |
 |---|---|
-| 에이전트 3.0 이 오면 서버맵의 DB 분류가 깨진다 | 새 버전은 `db.system` 대신 `db.system.name` 을 붙이는데 backend `mv_server_map_1m` 은 `db.system` 만 본다. 에이전트를 올리기 전에 backend 가 두 키를 다 보게 해야 한다 (`#32` research 2.2) |
+| 에이전트는 2.x 에 머문다 (3.0 은 올리지 않기로 함, `#47`) | 막힌 것은 아니다. 3.0 은 DB 호출 꼬리표를 `db.system` 에서 `db.system.name` 으로 바꾸는데 backend `mv_server_map_1m` 은 `db.system` 만 봐서, 올리면 MySQL · Redis 가 서버맵에서 외부로 잘못 그려진다. **올리게 되면 먼저** 수집 쪽 집계가 두 키를 다 보게 한다 (`#32` research 2.2) |
 | 스레드 덤프 API 서버 팬아웃 · 화면 · CH 저장이 없다 | 수집기 `POST /internal/thread-dump` 까지만 있다. API 서버 팬아웃(`agentUuid` → service · instance, 503 재시도)은 재범, CH `thread_dumps` 저장(Q16)은 조회 쪽. 그 전까지는 curl 로만 뜬다 |
 | 에이전트 오버헤드 기준이 빠듯하다 | 요구사항을 실측에 맞게 고쳤다(backend ADR `#56` : 파드당 CPU 1개 · 초당 주문 20건에서 1코어 대비 +3%p, 메모리 150MB). 지금 값은 통과(+1.4 ~ +2.1%p, 최대 141MB)지만 초당 40건이면 order · inventory 가 +3.5 · +3.6%p 로 넘고 메모리 여유는 9MB 다. 실제 파드 부하가 정해지거나 에이전트 버전을 올리면 `perf/overhead/` 로 다시 잰다 (`#36`) |
-| Redis 연결을 맺을 때 부모 없는 스팬 3개(`HELLO` · `CLIENT SETINFO`)가 남는다 | 앱 시작 · 재연결 때만 생겨 양이 작다. 헬스체크 `INFO` 는 `#32` 에서 껐다 |
+| Redis 연결을 맺을 때 부모 없는 스팬 3개(`HELLO` · `CLIENT SETINFO` ×2)가 남는다 (의도적으로 둠, `#47`) | Lettuce(Redis 드라이버)가 연결을 맺으며 보내는 인사라 감쌀 요청(SERVER 스팬)이 없다. 앱 시작 · 재연결 때만 3개씩이라 그대로 둔다. 헬스체크 `INFO` 고아는 `#32` 에서 재고 서비스의 Redis 헬스체크를 꺼서 없앴다 : 캐시 하나 때문에 재고 서비스 probe 가 실패하지 않게 하려는 것도 같은 이유다. Redis 상태는 Redis 자신의 probe(`redis-cli ping`)와 APM 서버맵(inventory → Redis 간선 에러)으로 본다 |
 
 ## 7. 참고
 
