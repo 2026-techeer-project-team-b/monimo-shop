@@ -18,6 +18,7 @@
 | `k6/` | 부하 · 에러 주입 시나리오 |
 | `pg-stub/` | 더미 외부 결제사 (WireMock 응답 정의, 에이전트 없음) |
 | `perf/overhead/` | 에이전트 오버헤드 측정 (붙임 · 뗌을 같은 부하로 비교). [`perf/overhead/README.md`](perf/overhead/README.md) |
+| `Dockerfile` (루트) | 네 서비스 이미지를 파일 하나로 만든다. Gradle 은 한 번만 돌고 서비스마다 `--target gateway · order · payment · inventory` 로 고른다 (`#42`). 한 서비스만 : `docker build --target order -t monimo/shop-order:dev .` |
 
 ## 로컬 실행
 
