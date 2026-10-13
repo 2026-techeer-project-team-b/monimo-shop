@@ -14,14 +14,18 @@ import org.springframework.web.bind.annotation.RestController
 @RequestMapping("/api/orders")
 class OrderController(private val service: OrderService) {
 
-    /** 파수꾼 카나리와 k6 가 부르는 문. 결제 실패면 502 로 답해 5xx 비율 규칙이 잡을 수 있게 한다. */
+    /** 파수꾼 카나리와 k6 가 부르는 문. 결제 · 재고 서비스 실패면 502(5xx 규칙), 재고 부족이면 409(4xx 규칙)로 답한다. */
     @PostMapping
     fun create(
         @RequestBody req: CreateOrderRequest,
         @RequestHeader(PaymentClient.FAULT_HEADER, required = false) fault: String?,
     ): ResponseEntity<CreateOrderResponse> {
         val res = service.create(req, fault)
-        val status = if (res.status == OrderStatus.PAID) HttpStatus.CREATED else HttpStatus.BAD_GATEWAY
+        val status = when (res.status) {
+            OrderStatus.PAID -> HttpStatus.CREATED
+            OrderStatus.SOLD_OUT -> HttpStatus.CONFLICT
+            else -> HttpStatus.BAD_GATEWAY
+        }
         return ResponseEntity.status(status).body(res)
     }
 

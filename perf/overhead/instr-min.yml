@@ -1,0 +1,20 @@
+# 원인 찾기 실험 : 계측을 전부 끈 뒤 쇼핑몰이 실제로 쓰는 것만 켠다. 그물에 걸리지만 필요 없는 계측이
+# CPU · 메모리를 얼마나 먹는지 본다. 켜 둔 목록으로 서버맵 · 트레이스 모양(SERVER · HTTP · DB · Redis 스팬)은 그대로 나와야 한다.
+# 운영 설정이 아니다 (실험용)
+x-env: &env
+  OTEL_INSTRUMENTATION_COMMON_DEFAULT_ENABLED: "false"
+  OTEL_INSTRUMENTATION_TOMCAT_ENABLED: "true"            # 들어오는 요청 (SERVER 스팬)
+  OTEL_INSTRUMENTATION_SERVLET_ENABLED: "true"
+  OTEL_INSTRUMENTATION_SPRING_WEBMVC_ENABLED: "true"     # 스팬 이름을 경로 템플릿(/api/orders/{id})으로
+  OTEL_INSTRUMENTATION_SPRING_WEB_ENABLED: "true"
+  OTEL_INSTRUMENTATION_JAVA_HTTP_CLIENT_ENABLED: "true"  # 서비스 사이 호출 · pg-stub (CLIENT 스팬)
+  OTEL_INSTRUMENTATION_JDBC_ENABLED: "true"              # MySQL
+  OTEL_INSTRUMENTATION_LETTUCE_ENABLED: "true"           # Redis
+  OTEL_INSTRUMENTATION_LOGBACK_APPENDER_ENABLED: "true"  # 로그 보내기
+  OTEL_INSTRUMENTATION_RUNTIME_TELEMETRY_ENABLED: "true" # JVM 메트릭 (jvm.*)
+  OTEL_INSTRUMENTATION_EXECUTORS_ENABLED: "true"         # 스레드를 건너는 컨텍스트 전파
+services:
+  gateway:   {environment: *env}
+  order:     {environment: *env}
+  payment:   {environment: *env}
+  inventory: {environment: *env}

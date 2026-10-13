@@ -1,0 +1,7 @@
+# 측정용 덮어쓰기 : 에이전트를 뗀 쪽. -javaagent 줄을 아예 뺀다 (Extension 도 같이 빠진다).
+# OTEL_JAVAAGENT_ENABLED=false 는 에이전트 jar 를 읽고 클래스로더를 만든 뒤 설치만 건너뛰어 조금 남는다. 그래서 쓰지 않는다 (#36)
+services:
+  gateway:   {entrypoint: ["java", "-jar", "/app/app.jar"]}
+  order:     {entrypoint: ["java", "-jar", "/app/app.jar"]}
+  payment:   {entrypoint: ["java", "-jar", "/app/app.jar"]}
+  inventory: {entrypoint: ["java", "-jar", "/app/app.jar"]}
